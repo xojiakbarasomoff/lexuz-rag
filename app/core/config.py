@@ -66,12 +66,15 @@ class Settings(BaseSettings):
     # --- retrieval -------------------------------------------------------
     retrieval_candidate_limit: int = 40
     retrieval_top_k: int = 6
-    retrieval_rrf_k: int = 60
+    retrieval_rrf_k: int = 10  # was 60; lowered after dev diagnostics (docs/decisions.md D22)
     # Weighted RRF (tuned on the dev split only, see docs/evaluation.md)
     retrieval_semantic_weight: float = 1.0
     retrieval_lexical_weight: float = 0.25
     retrieval_article_ref_weight: float = 2.0
     retrieval_title_list: bool = False  # extra RRF list on article titles; off: made dev recall worse (decisions.md)
+    # Optional local cross-encoder over the top fused candidates ("" = off).
+    retrieval_reranker: str = ""
+    retrieval_rerank_pool: int = 20
     context_max_tokens: int = 6000
     max_question_chars: int = 600
 

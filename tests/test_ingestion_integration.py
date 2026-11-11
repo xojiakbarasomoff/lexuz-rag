@@ -188,3 +188,24 @@ def test_vectors_are_scoped_by_embedding_space(db, small_source, settings):
         )
         res = retrieve(s, "zzzzqqq", settings, other)  # no vectors in this space, no lexical hit
     assert res.articles == []
+
+
+def test_optional_reranker_reorders_pool_only(db, small_source, settings, monkeypatch):
+    """Reranker (off by default) re-orders the top pool; tail keeps fused order. No model is loaded."""
+    from app.db.session import get_sessionmaker
+    from app.retrieval import rerank as rr
+    from app.retrieval.search import retrieve
+
+    emb = CountingEmbedder(settings)
+    run(fixture_html("lexuz_consumer_excerpt.html"), settings, emb)
+    q = "isteʼmolchi tovar sotuvchi huquqlari"
+    with get_sessionmaker()() as s:
+        base = retrieve(s, q, settings, emb).ranked_article_ids
+        assert settings.retrieval_reranker == ""  # default off
+        monkeypatch.setattr(rr, "rerank", lambda st, question, passages: [float(i) for i in range(len(passages))])
+        on = settings.model_copy(update={"retrieval_reranker": "fake", "retrieval_rerank_pool": 3})
+        dbg: dict = {}
+        reranked = retrieve(s, q, on, emb, debug=dbg).ranked_article_ids
+    assert reranked[:3] == list(reversed(base[:3]))  # fake scores rise with position -> reversed
+    assert reranked[3:] == base[3:]
+    assert len(dbg["rerank_scores"]) == 3

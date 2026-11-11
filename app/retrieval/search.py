@@ -38,6 +38,7 @@ class Candidate:
     chunk_id: uuid.UUID
     article_id: uuid.UUID
     ordinal: int
+    score: float | None = None  # list-specific: cosine distance (semantic) or ts_rank_cd (lexical)
 
 
 @dataclass
@@ -104,15 +105,15 @@ _ACTIVE_FILTER = """
 
 def semantic_search(s: Session, qvec: list[float], space: str, doc_ids, limit: int) -> list[Candidate]:
     sql = text(
-        "SELECT c.id, c.article_id, c.ordinal "
+        "SELECT c.id, c.article_id, c.ordinal, ce.embedding <=> CAST(:qvec AS vector) AS dist "
         + _ACTIVE_FILTER.replace(
             "WHERE",
             "JOIN chunk_embeddings ce ON ce.content_hash = c.content_hash AND ce.embedding_space = :space WHERE",
         )
-        + " ORDER BY ce.embedding <=> CAST(:qvec AS vector) LIMIT :limit"
+        + " ORDER BY dist LIMIT :limit"
     )
     rows = s.execute(sql, {"qvec": str(qvec), "space": space, "doc_ids": doc_ids, "limit": limit}).all()
-    return [Candidate(r[0], r[1], r[2]) for r in rows]
+    return [Candidate(r[0], r[1], r[2], float(r[3])) for r in rows]
 
 
 def article_ref_search(s: Session, question: str, doc_ids, limit: int) -> list[Candidate]:
@@ -138,7 +139,8 @@ def lexical_search(s: Session, question: str, doc_ids, limit: int) -> list[Candi
         + _ACTIVE_FILTER.replace("WHERE", ", to_tsquery('simple', :tsq) q WHERE")
         + " AND c.tsv @@ q ORDER BY rank DESC LIMIT :limit"
     )
-    return [Candidate(r[0], r[1], r[2]) for r in s.execute(sql, {"tsq": tsq, "doc_ids": doc_ids, "limit": limit})]
+    rows = s.execute(sql, {"tsq": tsq, "doc_ids": doc_ids, "limit": limit})
+    return [Candidate(r[0], r[1], r[2], float(r[3])) for r in rows]
 
 
 _APOS_CHARS = "ʻʼ'‘’`´"
@@ -194,34 +196,66 @@ def retrieve(
     settings: Settings,
     embedder: EmbeddingProvider,
     document_ids: list[uuid.UUID] | None = None,
+    debug: dict | None = None,
 ) -> RetrievalResult:
+    """`debug`, if given, receives the per-list rankings and fused scores (diagnostics/evals only)."""
     doc_ids = [str(d) for d in document_ids] if document_ids else None
     limit = settings.retrieval_candidate_limit
     lists: list[list[Candidate]] = []
     weights: list[float] = []
     tokens = 0
 
-    def add(lst: list[Candidate], w: float) -> None:
+    names: list[str] = []
+
+    def add(lst: list[Candidate], w: float, name: str) -> None:
         if w > 0 and lst:
             lists.append(lst)
             weights.append(w)
+            names.append(name)
 
-    for variant in query_variants(question):
+    for n, variant in enumerate(query_variants(question)):
         tokens += estimate_tokens(variant)
         add(
             semantic_search(s, embedder.embed_query(variant), embedder.space, doc_ids, limit),
             settings.retrieval_semantic_weight,
+            f"semantic[{n}]",
         )
-        add(lexical_search(s, variant, doc_ids, limit), settings.retrieval_lexical_weight)
-        add(article_ref_search(s, variant, doc_ids, limit), settings.retrieval_article_ref_weight)
+        add(lexical_search(s, variant, doc_ids, limit), settings.retrieval_lexical_weight, f"lexical[{n}]")
+        add(article_ref_search(s, variant, doc_ids, limit), settings.retrieval_article_ref_weight, f"article_ref[{n}]")
         if settings.retrieval_title_list:
-            add(title_search(s, variant, doc_ids, limit), settings.retrieval_lexical_weight)
+            add(title_search(s, variant, doc_ids, limit), settings.retrieval_lexical_weight, f"title[{n}]")
     article_score, article_chunks = rrf_fuse(lists, settings.retrieval_rrf_k, weights)
     ranked = sorted(article_score, key=lambda a: -article_score[a])
+    if settings.retrieval_reranker and ranked:
+        ranked = _rerank(s, question, ranked, article_chunks, settings, debug)
+    if debug is not None:
+        debug.update(
+            lists=dict(zip(names, lists, strict=True)),
+            weights=dict(zip(names, weights, strict=True)),
+            article_score=article_score,
+        )
     top = ranked[: settings.retrieval_top_k]
     articles = _load_articles(s, top, article_score, article_chunks)
     articles = assemble_context(s, articles, settings.context_max_tokens)
     return RetrievalResult(articles, ranked, embedder.space, tokens)
+
+
+def _rerank(s: Session, question: str, ranked, article_chunks, settings: Settings, debug: dict | None):
+    """Re-order the top fused articles with a cross-encoder; the tail keeps its fused order."""
+    from app.retrieval.rerank import rerank
+
+    pool = ranked[: settings.retrieval_rerank_pool]
+    best_chunk = {aid: article_chunks[aid][0].chunk_id for aid in pool}
+    rows = s.execute(
+        text("SELECT id, embed_text FROM chunks WHERE id IN :ids").bindparams(bindparam("ids", expanding=True)),
+        {"ids": list(best_chunk.values())},
+    ).all()
+    texts = {r[0]: r[1] for r in rows}
+    scores = rerank(settings, question, [texts[best_chunk[a]] for a in pool])
+    order = [a for _, a in sorted(zip(scores, pool, strict=True), key=lambda x: -x[0])]
+    if debug is not None:
+        debug["rerank_scores"] = dict(zip(pool, scores, strict=True))
+    return order + ranked[settings.retrieval_rerank_pool :]
 
 
 def _load_articles(s: Session, ids, scores, chunks) -> list[RetrievedArticle]:

@@ -290,7 +290,15 @@ def cmd_answers(args) -> int:
             return 2
         previous = [json.loads(x) for x in ckpt.read_text(encoding="utf-8").splitlines() if x.strip()]
     ckpt.parent.mkdir(parents=True, exist_ok=True)
-    spent_before = sum(r.get("est_cost_usd", 0.0) for r in previous)
+    spent_before = sum(r.get("est_cost_usd", 0.0) for r in previous)  # incl. rows dropped for retry
+    if args.retry_errors:
+        transient = {"provider_unavailable", "provider_timeout"}
+        dropped = [r["id"] for r in previous if r.get("error") in transient]
+        previous = [r for r in previous if r.get("error") not in transient]
+        if dropped:
+            print(f"retrying items that ended with a transient provider error: {', '.join(dropped)}")
+            lines = [json.dumps(r, ensure_ascii=False, default=str) for r in previous]
+            ckpt.write_text("\n".join(lines) + "\n", encoding="utf-8")
     remaining = max(0.0, args.max_cost_usd - spent_before)
     print(f"checkpoint {ckpt}: {len(previous)} done, est. spent {spent_before:.4f} USD, cap left {remaining:.4f} USD")
     run_scope = "eval-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
@@ -528,6 +536,11 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--confirm-holdout", action="store_true")
     a.add_argument("--checkpoint", default=None, help="JSONL checkpoint (default evals/results/checkpoints/)")
     a.add_argument("--resume", action="store_true", help="continue an existing checkpoint")
+    a.add_argument(
+        "--retry-errors",
+        action="store_true",
+        help="with --resume: re-run items that ended with provider_unavailable/timeout",
+    )
     a.add_argument("--sleep-s", type=float, default=13.0, help="pause between items (free-tier pacing)")
     a.set_defaults(fn=cmd_answers)
     args = p.parse_args(argv)
