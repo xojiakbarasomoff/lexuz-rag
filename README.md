@@ -15,11 +15,11 @@ exact article on Lex.uz.
 | Corpus | ✅ Labor Code (593 articles) and Consumer Protection Law (33 articles), Uzbek Latin. Consumer law: live fetch. Labor Code: local import of the official page (live fetch hit a DNS failure), later **confirmed identical by a live fetch**. |
 | Ingestion | ✅ fetch → snapshot → parse → publish gate → chunk → embed → atomic activation; idempotent; CLI + Celery |
 | Retrieval | ✅ hybrid (pgvector + PostgreSQL FTS + article-number match, weighted RRF); evaluated on real data |
-| Answer generation | ✅ implemented (Claude, structured JSON, citation/quote validation, repair, fallback) and tested with a fake LLM. ⚠️ **Not yet run against the real API** — no API key in the build environment. |
+| Answer generation | ✅ implemented (default `claude-haiku-5-5`, ID and price verified on the official docs; structured JSON, citation/quote validation, repair, fallback) and tested with a fake LLM. ⚠️ **Not yet run against the real API** — no API key yet ([setup](docs/llm-setup.md)). **Answer quality is unmeasured, so the project is not ready.** |
 | Rate limit / budget | ✅ Redis Lua, tested with real Redis incl. 20-thread race and Redis outage |
 | Frontend | ✅ single static page, Uzbek UI, text-only rendering, XSS test |
 | Tests / CI | ✅ 74 tests (unit + PostgreSQL/pgvector + Redis integration) pass locally; CI workflow written — ⚠️ not yet run on GitHub (repo not pushed) |
-| Eval | ✅ 50-item benchmark (AI-drafted, **not human-verified**); retrieval results below. ⚠️ answer-level eval not run (needs API key) |
+| Eval | ✅ 50-item benchmark (AI-drafted, **not human-verified**; review sheet in `evals/review/`, status `not_reviewed`); retrieval results below. ⚠️ answer-level eval not run (needs API key); it is capped at $1 incl. repairs and retries |
 | Deployment / CD | ⚠️ configs and scripts ready and locally validated; **not deployed** — no VPS, domain or secrets |
 | Live URL | none yet |
 | Demo video | not recorded |
@@ -120,10 +120,10 @@ Errors: `{"request_id", "error": {"code", "message"}}` with codes such as
 
 | Split | n | Recall@1 | Recall@3 | Recall@6 | MRR |
 |---|---|---|---|---|---|
-| dev (tuned on) | 26 | 0.635 | 0.827 | 0.827 | 0.749 |
-| holdout (run once) | 17 | 0.706 | 0.882 | 1.000 | 0.801 |
+| dev (tuned on) | 26 of 30 | 0.635 | 0.827 | 0.827 | 0.749 |
+| holdout (run once) | 17 of 20 | 0.706 | 0.882 | 1.000 | 0.801 |
 
-Small samples — one item ≈ 4–6 points. Answer quality, citation
+Ambiguous and out-of-corpus items have no expected article and are excluded from Recall/MRR (they are scored by the answer eval). Small samples — one item ≈ 4–6 points. Answer quality, citation
 precision/recall, refusal accuracy, latency and cost of the full pipeline have
 **not** been measured yet (needs an API key): run
 `uv run python -m app.cli eval answers --split dev --max-cost-usd 1`.

@@ -52,8 +52,19 @@ Embedding `fastembed:intfloat/multilingual-e5-large:1024`, `top_k=6`,
 candidates 40, RRF k 60. Corpus: Consumer Protection Law `7c759eec74a0`
 (live fetch, edition 02.02.2026), Labor Code `af3d92c6ade6` (local import of an
 official page, later confirmed identical by a live fetch; edition “15.10.2026 01”).
-Items without expected articles (ambiguous / out-of-corpus) are excluded from
-retrieval metrics: dev n = 26, holdout n = 17.
+Why 26 and 17 instead of 30 and 20: Recall@k and MRR need at least one
+expected article. Items whose correct behaviour is to ask a clarifying
+question or to abstain have none, so they are excluded from retrieval metrics
+and scored only by the live answer eval (status accuracy):
+
+| Split | In benchmark | Counted | Excluded (reason: no expected article) |
+|---|---|---|---|
+| dev | 30 | 26 | dev-17, dev-28 (ambiguous → clarification); dev-18, dev-29 (out of corpus → insufficient evidence) |
+| holdout | 20 | 17 | hold-12 (ambiguous); hold-13, hold-19 (out of corpus) |
+
+Retrieval reports from `20261111T060835Z` on list counted and excluded items.
+For the earlier holdout run, `20261111T055136Z_retrieval_holdout.counted.md`
+lists them (generated from the benchmark file; holdout was not re-run).
 
 | Run (report in `evals/results/`) | Split | Weights sem/FTS/ref | R@1 | R@3 | R@6 | MRR |
 |---|---|---|---|---|---|---|
@@ -77,7 +88,15 @@ Reading these numbers honestly:
   padded injection question (130).
 - **Answer-level metrics: not yet measured.** No `ANTHROPIC_API_KEY` was
   available in the build environment, so `eval answers` has not been run and
-  no answer-quality, cost or end-to-end latency numbers exist yet.
+  no answer-quality, cost or end-to-end latency numbers exist yet
+  (setup: docs/llm-setup.md). The project is not "ready" until it is.
+
+## Human review
+
+`python -m evals.build_review_sheet` writes `evals/review/review_sheet.md`
+(question, reference answer, article and original text side by side, from the
+active corpus) and `evals/review/review_form.csv` (one row per item,
+`review_status = not_reviewed`). **No item has been reviewed by a human.**
 
 ## Error analysis notes (dev)
 
