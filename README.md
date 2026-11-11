@@ -125,31 +125,29 @@ Errors: `{"request_id", "error": {"code", "message"}}` with codes such as
 
 ## Evaluation results (real runs, retrieval only)
 
-`fastembed:intfloat/multilingual-e5-large`, top-k 6, weighted RRF (semantic 1.0 / FTS 0.25 / article number 2.0):
+`fastembed:intfloat/multilingual-e5-large`, top-k 6, weighted RRF (semantic 1.0 / FTS 0.25 / article number 2.0). Dev row uses RRF k=10 (D22); the holdout row is the earlier one-time run with k=60 — holdout was not re-run after the change:
 
 | Split | n | Recall@1 | Recall@3 | Recall@6 | MRR |
 |---|---|---|---|---|---|
-| dev (tuned on) | 26 of 30 | 0.635 | 0.827 | 0.827 | 0.749 |
+| dev (tuned on), RRF k=10 | 26 of 30 | 0.712 | 0.827 | 0.904 | 0.796 |
 | holdout (run once) | 17 of 20 | 0.706 | 0.882 | 1.000 | 0.801 |
 
 Ambiguous and out-of-corpus items have no expected article and are excluded from Recall/MRR (they are scored by the answer eval). Small samples — one item ≈ 4–6 points.
 
 ### Answer eval — dev, real Gemini API (`gemini-3.5-flash-lite`, free tier, 2026-11-11)
 
-| Status accuracy | Abstain/clarify accuracy | Citation precision | Citation recall | Claim coverage | Provider blocks | p50 / p95 latency | Tokens in / out |
-|---|---|---|---|---|---|---|---|
-| 0.867 (26/30) | 1.0 (4/4) | 0.932 | 0.788 | 1.0 | 0 | 3.8 s / 14.4 s | 145,630 / 14,712 |
+After the retrieval fix (RRF k 60 → 10, D22), same 30 dev questions:
 
-33 calls incl. 3 repairs; 1 safe fallback; $0 charged (free tier),
-paid-equivalent estimate $0.08. Main failure: three questions whose article
-was not retrieved got an honest “not in the sources” instead of an answer.
-Details and failure examples: [docs/evaluation.md](docs/evaluation.md).
-Semantic faithfulness has **not** been reviewed by a human yet, and holdout
-answers were not run — the project is not “done”. Answer quality, citation
-precision/recall, refusal accuracy, latency and cost of the full pipeline have
-**not** been measured yet (needs an API key): run
-`uv run python -m app.cli eval answers --split dev --max-cost-usd 1`.
-Full history and caveats: [docs/evaluation.md](docs/evaluation.md).
+| Status accuracy | Abstain/clarify | Citation precision | Citation recall | Claim coverage | Provider blocks | p50 / p95 latency | Tokens in / out |
+|---|---|---|---|---|---|---|---|
+| 0.933 (28/30) | 1.0 (4/4) | 0.906 | 0.846 | 1.0 | 0 | 8.2 s / 18.5 s | 140,242 / 15,450 |
+
+Before the fix: status 0.867, precision 0.932, recall 0.788, p50 3.8 s.
+4 items first failed with transient Gemini 5xx and were re-run once. $0
+charged (free tier). Remaining failures and regressions are listed in
+[docs/evaluation.md](docs/evaluation.md). Citation validity is not legal
+correctness; semantic faithfulness has **not** been reviewed by a human, and
+holdout answers were not run — the project is not "done".
 
 ## Tests
 

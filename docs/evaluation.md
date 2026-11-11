@@ -144,6 +144,67 @@ Failure examples (all from the report):
 
 Not measured: semantic faithfulness (manual review pending), holdout answers.
 
+## Retrieval fix (RRF k 60 → 10) and second dev answer eval (2026-11-11)
+
+Diagnosis, sweep and per-item comparison: decision D22 (`docs/decisions.md`),
+tools `python -m evals.diagnose_retrieval` and `python -m evals.compare_retrieval`.
+Benchmark references of the failing items were re-checked against the
+stored source text and were correct; the benchmark was **not** changed and
+this is not a human review.
+
+Retrieval, same 26 dev items: R@6 0.827 → **0.904**, MRR 0.749 → **0.796**,
+R@1 0.635 → 0.712, p50 ≈ 150 ms unchanged (report `20261111T142712Z_retrieval_dev`).
+Fixed 217 and 182; nothing left the top 6; three articles moved down inside
+the top 6 (262 #2→#5, 129 #2→#4, 22 #1→#2).
+
+Answer eval, same 30 dev questions, `gemini-3.5-flash-lite` free tier,
+checkpoint `evals/results/checkpoints/answers_dev_rrf10.jsonl`:
+
+- First pass (`20261111T143905Z_answers_dev`): 4 items ended with
+  `provider_unavailable` (Gemini 5xx after one SDK retry) — infrastructure
+  errors, kept on record in that report's JSON (all 30 rows incl. the errors).
+- Those 4 items were re-run once with `--resume --retry-errors`
+  (`20261111T144129Z_answers_dev`, the final report below). No other item was
+  re-run.
+
+| Metric (30 dev items) | k=60 run | k=10 run |
+|---|---|---|
+| Status accuracy | 0.867 | **0.933** |
+| — expected `answered` | 0.846 | **0.923** |
+| — abstain / clarify | 1.000 | 1.000 |
+| Citation precision vs expected | 0.932 | 0.906 |
+| Citation recall vs expected | 0.788 | **0.846** |
+| Claim citation coverage | 1.000 | 1.000 |
+| First-try valid | 0.900 | 0.900 |
+| Safe fallbacks | 1 | 1 |
+| Provider safety blocks | 0 | 0 |
+| p50 / p95 end-to-end latency | 3.8 s / 14.4 s | **8.2 s / 18.5 s** |
+| Tokens in / out (final rows) | 145,630 / 14,712 | 140,242 / 15,450 |
+| Paid-equivalent estimate (charged: $0) | $0.08 | $0.08 final rows + $0.05 counted for the 4 failed calls |
+
+Latency got worse while retrieval latency stayed ~150 ms; the increase
+happened together with Gemini 503s, so it is most likely provider-side load
+on the free tier. It is not proven and is reported as measured.
+
+Per-item changes (k=60 → k=10):
+
+- **Fixed:** dev-03 (217, 21 days) and dev-04 (182, 40 hours) are now answered
+  from the right article; dev-14 is now answered (173, plus an extra cite of 442).
+- **Worse:** dev-09 — the first output's quote was > 400 chars / not verbatim,
+  the repair failed too → safe fallback (previously answered from 165 after a
+  repair). dev-23 — 12¹ was retrieved at #1, but the model answered only from
+  28¹ and said the delivery-delay penalty is not in the sources (generation
+  error). dev-25 — now cites Labor Code 174, 335, 565 besides consumer-law 22
+  (precision 0.25).
+- **Unchanged failures:** dev-08 (160 still rank 11, semantic miss on the
+  everyday-language resignation question), dev-19 (130 not retrieved for the
+  injection-padded question; the system prompt was not revealed).
+
+Generation is not deterministic between runs; part of the dev-09 / dev-23
+difference is run-to-run variance, not the retrieval change. Valid citations
+mean the quoted words exist in the cited article — **not** that the answer is
+legally correct. Holdout was not run.
+
 ## Human review
 
 `python -m evals.build_review_sheet` writes `evals/review/review_sheet.md`

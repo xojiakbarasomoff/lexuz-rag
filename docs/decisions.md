@@ -159,3 +159,44 @@ statuses) is returned when Gemini's safety filter blocks the prompt or the
 answer. It is not merged into `insufficient_evidence`, because a block says
 nothing about whether the sources cover the question. Evals count it
 separately.
+
+### D22. RRF k lowered from 60 to 10 (dev diagnostics, 2026-11-11)
+`python -m evals.diagnose_retrieval --split dev` showed where the expected
+articles of the failing dev items were lost (benchmark references checked
+against the source text first: they were correct, nothing was changed in the
+benchmark):
+
+| Item | Article | Semantic | Lexical | Fused (k=60) | Lost at |
+|---|---|---|---|---|---|
+| dev-03 | 217 | #1 (dist 0.120) | — | #10 | fusion |
+| dev-04 | 182 | #1 (dist 0.120) | — | #9 | fusion |
+| dev-08 | 160 | #9 (dist 0.207) | — | #12 | semantic (paraphrase) |
+| dev-09 | 173 | — | #5 | #34 | lexical-only hit, weight 0.25 |
+| dev-19 | 130 | — | — | — | query dominated by injection text |
+
+Parsing, chunking and the context limit were not the cause. With k=60 the RRF
+curve is so flat that any article present in both lists (e.g. semantic #4 +
+lexical #11) beats the semantic #1 article that has no lexical match.
+
+Same 26 dev items, retrieval only (`--k 10`), no holdout:
+
+| Config | R@1 | R@3 | R@6 | R@10 | MRR | p50 ms |
+|---|---|---|---|---|---|---|
+| k=60, lex 0.25 (before) | 0.635 | 0.827 | 0.827 | 0.904 | 0.749 | 149 |
+| k=30 | 0.635 | 0.827 | 0.904 | 0.904 | 0.750 | 144 |
+| k=20 | 0.635 | 0.827 | 0.904 | 0.904 | 0.758 | 172 |
+| **k=10 (chosen)** | **0.712** | 0.827 | **0.904** | 0.904 | **0.796** | 150 |
+| k=5 | 0.712 | 0.827 | 0.904 | 0.904 | 0.795 | 147 |
+| k=10, lex 0.5 | 0.673 | 0.865 | 0.904 | 0.904 | 0.782 | 151 |
+| k=10, lex 0.1 | 0.712 | 0.827 | 0.865 | 0.942 | 0.785 | 142 |
+| k=10, pool 80 | 0.712 | — | 0.904 | 0.904 | 0.797 | 155 |
+| k=10 + bge-reranker-v2-m3-int8 (pool 20) | 0.731 | 0.846 | 0.904 | 0.904 | 0.802 | **16 729** |
+
+Per-item comparison k=60 → k=10 (`python -m evals.compare_retrieval`):
+fixed 217 (#10→#1) and 182 (#9→#1); nothing left the top 6; inside the top 6
+three articles moved down: 262 (#2→#5), 129 (#2→#4), 22 (#1→#2); 312 and 160
+moved up (160 still #11, outside the context).
+
+The reranker is implemented (`RETRIEVAL_RERANKER`, off by default) but not
+enabled: +0.006 MRR is not worth ~110× retrieval latency on CPU.
+Still unsolved: dev-08 (160), dev-09 second aspect (173), dev-19 (130).
