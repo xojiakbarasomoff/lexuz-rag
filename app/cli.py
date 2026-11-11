@@ -182,9 +182,14 @@ def cmd_reindex(_args) -> int:
 
 
 def cmd_ask(args) -> int:
-    from app.generation.answer import answer_question
+    from app.api.errors import error_payload
+    from app.generation.answer import AnswerError, answer_question
 
-    res = answer_question(args.question, document_ids=None, request_id="cli")
+    try:
+        res = answer_question(args.question, document_ids=None, request_id="cli")
+    except AnswerError as exc:
+        _print(error_payload(exc.code, "cli")[1])
+        return 1
     _print(res.model_dump(mode="json"))
     return 0
 

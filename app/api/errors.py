@@ -12,11 +12,18 @@ ERRORS: dict[str, tuple[int, str]] = {
     "corpus_unavailable": (503, "Indekslangan hujjatlar hozircha mavjud emas."),
     "provider_timeout": (504, "AI xizmati o‘z vaqtida javob bermadi. Qayta urinib ko‘ring."),
     "provider_rate_limited": (503, "AI xizmati hozir cheklangan. Birozdan keyin urinib ko‘ring."),
-    "provider_quota": (503, "AI xizmati limiti tugagan. Keyinroq urinib ko‘ring."),
+    "provider_quota": (
+        503,
+        "Bepul AI kvotasi hozircha tugagan (daqiqalik yoki kunlik limit). Birozdan keyin yoki ertaga qayta "
+        "urinib ko‘ring. Hujjatlar ro‘yxati ishlashda davom etadi.",
+    ),
+    "quota_exhausted": (
+        503,
+        "Demo uchun AI so‘rovlari limiti hozircha tugagan (bepul kvota). Keyinroq qayta urinib ko‘ring.",
+    ),
     "provider_unavailable": (503, "AI xizmati vaqtincha ishlamayapti."),
     "provider_auth": (503, "AI xizmati sozlanmagan."),
     "provider_bad_request": (502, "AI xizmati so‘rovni qabul qilmadi."),
-    "provider_truncated": (502, "AI javobi to‘liq bo‘lmadi. Savolni qisqaroq yozing."),
     "not_found": (404, "Topilmadi."),
     "internal_error": (500, "Ichki xatolik yuz berdi."),
 }

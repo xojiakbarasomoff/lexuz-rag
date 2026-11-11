@@ -134,3 +134,8 @@ def test_frontend_renders_malicious_text_as_text():
     script = Path(__file__).parent / "frontend_xss_test.js"
     out = subprocess.run(["node", str(script), str(FRONTEND)], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stdout + out.stderr
+
+
+def test_ui_shows_free_tier_privacy_notice():
+    html = (Path(__file__).parents[1] / "frontend" / "index.html").read_text(encoding="utf-8")
+    assert "Shaxsiy yoki maxfiy" in html and "18 yoshdan" in html and "Gemini" in html

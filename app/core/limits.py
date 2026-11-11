@@ -17,6 +17,7 @@ All amounts are *estimates* computed from configured prices.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import time
 from dataclasses import dataclass
@@ -29,6 +30,8 @@ import redis
 from app.core.config import Settings, get_settings
 
 TASHKENT = ZoneInfo("Asia/Tashkent")
+# Gemini API requests-per-day quotas reset at midnight Pacific time (aistudio.google.com/docs/rate-limits).
+PACIFIC = ZoneInfo("America/Los_Angeles")
 MICRO = 1_000_000
 
 
@@ -49,6 +52,15 @@ class BudgetExceeded(Exception):
 
 class Busy(Exception):
     pass
+
+
+class LLMQuotaExceeded(Exception):
+    """Project-wide LLM call cap reached locally, or the provider recently said the quota is used up."""
+
+    def __init__(self, scope: str, retry_after: int):
+        super().__init__(scope)
+        self.scope = scope
+        self.retry_after = retry_after
 
 
 _RESERVE_LUA = """
@@ -166,6 +178,38 @@ class Guards:
         )
         if not ok:
             raise Busy()
+
+    # --- project-wide LLM call caps (free tier) ----------------------------
+    def check_llm_quota(self, now: float | None = None) -> None:
+        """Count one provider call against project-wide per-minute / per-day caps.
+
+        Also refuses while a recent provider 429 is being respected, so the free
+        quota is never hammered with retries.
+        """
+        now = now or time.time()
+        blocked = self._call(self.r.ttl, "llm:provider_quota_block")
+        if blocked and blocked > 0:
+            raise LLMQuotaExceeded("provider", int(blocked))
+        minute = int(now // 60)
+        pac_day = datetime.fromtimestamp(now, UTC).astimezone(PACIFIC).strftime("%Y-%m-%d")
+        res = self._call(
+            self.r.eval,
+            _RATE_LUA,
+            2,
+            f"llmq:m:{minute}",
+            f"llmq:d:{pac_day}",
+            self.settings.llm_global_calls_per_minute,
+            self.settings.llm_global_calls_per_day,
+        )
+        if res == 1:
+            raise LLMQuotaExceeded("minute", 60 - int(now % 60))
+        if res == 2:
+            raise LLMQuotaExceeded("day", 3600)
+
+    def mark_provider_quota_exhausted(self, seconds: int = 120) -> None:
+        """After a provider 429, stop sending calls for a while (no retry storm)."""
+        with contextlib.suppress(redis.RedisError):
+            self.r.set("llm:provider_quota_block", 1, ex=seconds)
 
     def release_slot(self, call_id: str) -> None:
         try:

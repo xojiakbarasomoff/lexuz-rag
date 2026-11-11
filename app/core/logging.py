@@ -16,8 +16,9 @@ import structlog
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 _SECRET_PATTERNS = [
-    re.compile(r"sk-ant-[A-Za-z0-9_\-]{8,}"),
-    re.compile(r"(?i)(api[_-]?key|authorization|token|password)=([^\s&]+)"),
+    re.compile(r"AIza[0-9A-Za-z_\-]{20,}"),  # Google API keys
+    re.compile(r"sk-[A-Za-z0-9_\-]{16,}"),
+    re.compile(r"(?i)(api[_-]?key|key|authorization|token|password)=([^\s&]+)"),
 ]
 
 
@@ -43,6 +44,10 @@ def _redact_secrets(_logger, _method, event_dict):
 
 def configure_logging(level: str = "INFO") -> None:
     logging.basicConfig(format="%(message)s", stream=sys.stdout, level=level.upper())
+    # Third-party HTTP loggers print request URLs at INFO and bypass the redaction
+    # processor above; keep them quiet so no URL with credentials can be logged.
+    for noisy in ("httpx", "httpx2", "httpcore", "google_genai", "google_genai._api_client"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

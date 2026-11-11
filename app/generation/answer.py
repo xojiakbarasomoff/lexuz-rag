@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 
 from app.core.config import Settings, get_settings
-from app.core.limits import BudgetExceeded, Busy, Guards, estimate_cost_usd, get_guards
+from app.core.limits import BudgetExceeded, Busy, Guards, LLMQuotaExceeded, estimate_cost_usd, get_guards
 from app.core.logging import get_logger
 from app.db.session import get_sessionmaker
 from app.generation.prompt import (
@@ -122,6 +122,7 @@ def _guarded_call(deps: Deps, trace: AnswerTrace, user: str, request_id: str) ->
         g.acquire_slot(call_id)
     try:
         if g:
+            g.check_llm_quota()  # project-wide free-tier caps; counts repairs too
             g.reserve(call_id, est_cost, scope=deps.budget_scope)
         trace.llm_calls += 1
         t0 = time.perf_counter()
@@ -137,6 +138,8 @@ def _guarded_call(deps: Deps, trace: AnswerTrace, user: str, request_id: str) ->
                 actual = 0.0 if exc.code in LLMError.NOT_BILLED else est_cost  # timeout: may be billed
             if g:
                 g.settle(call_id, actual, scope=deps.budget_scope)
+                if exc.code == "provider_quota":
+                    g.mark_provider_quota_exhausted()
             trace.est_cost_usd += actual
             metrics.provider_errors.labels(code=exc.code).inc()
             _record_usage(
@@ -290,12 +293,14 @@ def answer_question(
         raise AnswerError("budget_exhausted") from exc
     except Busy as exc:
         raise AnswerError("busy") from exc
+    except LLMQuotaExceeded as exc:
+        raise AnswerError("quota_exhausted", exc.scope) from exc
     except LLMError as exc:
-        if exc.code == "provider_refused":
+        if exc.code == "provider_blocked":
             return done(
                 status="insufficient_evidence",
                 corpus_checked_at=checked_at,
-                limitations=["Bu savolga javob berib bo‘lmaydi."],
+                limitations=["AI xizmatining xavfsizlik filtri bu savolga javobni to‘xtatdi."],
             )
         raise AnswerError(exc.code, exc.detail) from exc
 

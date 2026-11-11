@@ -280,8 +280,21 @@ def cmd_answers(args) -> int:
 
     # Hard cap for the whole run: every LLM call (incl. repair calls and SDK retries)
     # reserves its worst-case cost in a run-specific Redis budget before it is sent.
+    # Resumable: finished rows are appended to a checkpoint file; a later run with
+    # --resume skips them and only spends what is left of --max-cost-usd.
+    ckpt = Path(args.checkpoint or RESULTS / "checkpoints" / f"answers_{args.split}.jsonl")
+    previous: list[dict] = []
+    if ckpt.exists():
+        if not args.resume:
+            print(f"checkpoint {ckpt} exists: pass --resume to continue it, or move it away to start over")
+            return 2
+        previous = [json.loads(x) for x in ckpt.read_text(encoding="utf-8").splitlines() if x.strip()]
+    ckpt.parent.mkdir(parents=True, exist_ok=True)
+    spent_before = sum(r.get("est_cost_usd", 0.0) for r in previous)
+    remaining = max(0.0, args.max_cost_usd - spent_before)
+    print(f"checkpoint {ckpt}: {len(previous)} done, est. spent {spent_before:.4f} USD, cap left {remaining:.4f} USD")
     run_scope = "eval-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-    eval_settings = settings.model_copy(update={"daily_ai_budget_usd": args.max_cost_usd})
+    eval_settings = settings.model_copy(update={"daily_ai_budget_usd": remaining})
     guards = Guards(get_redis(), eval_settings)
     if not guards.ping():
         print("Redis is required to enforce --max-cost-usd; start it first")
@@ -294,7 +307,8 @@ def cmd_answers(args) -> int:
         budget_scope=run_scope,
     )
     items = load(args.split)
-    rows, not_run = [], []
+    rows, not_run = list(previous), []
+    done_ids = {r["id"] for r in previous}
     with get_sessionmaker()() as s:
         from app.models import Document
 
@@ -306,7 +320,11 @@ def cmd_answers(args) -> int:
             len(items),
             {
                 "llm_model": settings.llm_model,
-                "llm_effort": settings.llm_effort,
+                "llm_provider": settings.llm_provider,
+                "llm_thinking_level": settings.llm_thinking_level,
+                "sleep_between_items_s": args.sleep_s,
+                "checkpoint": str(ckpt),
+                "resumed_rows": len(previous),
                 "max_output_tokens": settings.llm_max_output_tokens,
                 "prices_per_mtok_usd": [settings.llm_input_price_per_mtok_usd, settings.llm_output_price_per_mtok_usd],
                 "llm_max_retries": settings.llm_max_retries,
@@ -314,10 +332,16 @@ def cmd_answers(args) -> int:
             },
         )
     stop = False
+    first_call = True
     for it in items:
+        if it["id"] in done_ids:
+            continue
         if stop:
             not_run.append(it["id"])
             continue
+        if not first_call and args.sleep_s:
+            time.sleep(args.sleep_s)  # stay well inside free-tier per-minute quotas
+        first_call = False
         trace = AnswerTrace()
         t0 = time.perf_counter()
         try:
@@ -327,8 +351,13 @@ def cmd_answers(args) -> int:
             status, err = resp.status, None
         except AnswerError as exc:
             resp, status, err = None, "error", exc.code
-            if exc.code == "budget_exhausted":
-                print(f"stopping: cost cap {args.max_cost_usd} USD reached (reservation refused)")
+            if exc.code in ("budget_exhausted", "provider_quota", "quota_exhausted"):
+                reason = {
+                    "budget_exhausted": f"cost cap {args.max_cost_usd} USD reached (reservation refused)",
+                    "provider_quota": "Gemini free-tier quota exhausted (HTTP 429); no retries",
+                    "quota_exhausted": "local free-tier call cap reached",
+                }[exc.code]
+                print(f"stopping: {reason}. Resume later with --resume")
                 not_run.append(it["id"])
                 stop = True
                 continue
@@ -377,6 +406,8 @@ def cmd_answers(args) -> int:
                 "limitations": resp.limitations if resp else [],
             }
         )
+        with open(ckpt, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rows[-1], ensure_ascii=False, default=str) + "\n")
         print(f"{it['id']}: {status} (expected {it['expected_status']}) {round(latency)} ms")
     summary = _answer_summary(rows)
     summary["not_run_due_to_cap"] = len(not_run)
@@ -484,6 +515,9 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--split", default="dev", choices=["dev", "holdout", "all"])
     a.add_argument("--max-cost-usd", type=float, default=1.0)
     a.add_argument("--confirm-holdout", action="store_true")
+    a.add_argument("--checkpoint", default=None, help="JSONL checkpoint (default evals/results/checkpoints/)")
+    a.add_argument("--resume", action="store_true", help="continue an existing checkpoint")
+    a.add_argument("--sleep-s", type=float, default=13.0, help="pause between items (free-tier pacing)")
     a.set_defaults(fn=cmd_answers)
     args = p.parse_args(argv)
     return args.fn(args)

@@ -11,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -76,24 +76,33 @@ class Settings(BaseSettings):
     max_question_chars: int = 600
 
     # --- generation ------------------------------------------------------
-    llm_provider: Literal["anthropic", "fake"] = "anthropic"
-    # Verified 2026-11-11 on platform.claude.com models overview + pricing (docs/decisions.md D15).
-    llm_model: str = "claude-haiku-5-5"
-    llm_effort: Literal["low", "medium", "high", "xhigh", "max"] = "low"
-    llm_max_output_tokens: int = 4096
+    llm_provider: Literal["gemini", "fake"] = "gemini"
+    # Read from GEMINI_API_KEY. SecretStr: never printed in reprs, logs or errors.
+    gemini_api_key: SecretStr | None = None
+    # Stable Flash model with a free tier and structured output, verified on
+    # https://aistudio.google.com/docs/models and /docs/pricing (docs/decisions.md D17).
+    llm_model: str = "gemini-3.8-flash"
+    # gemini-3.8-flash accepts low|medium|high (minimal is rejected); thinking tokens count as output.
+    llm_thinking_level: Literal["minimal", "low", "medium", "high"] = "low"
+    # Hard cap per call, INCLUDING thinking tokens.
+    llm_max_output_tokens: int = 2048
     llm_timeout_s: float = 60.0
+    # SDK retries on 5xx only (never on 429). Each retry is reserved in the budget.
     llm_max_retries: int = 1
-    # Server-side refusal fallback ("default" lets the API pick the fallback model).
-    # Haiku 5.5 has no server-side refusal fallback; "default" is for Opus/Sonnet/Fable.
-    llm_refusal_fallback: Literal["default", "off"] = "off"
-    # Haiku 5.5 list price for prompts <= 100k tokens (our prompts are far smaller).
-    llm_input_price_per_mtok_usd: float = 0.10
-    llm_output_price_per_mtok_usd: float = 0.50
+    # Paid-tier list price of gemini-3.8-flash until 2026-12-31 (USD / 1M tokens).
+    # On the free tier nothing is charged; these figures give a conservative
+    # "paid-equivalent" estimate and drive the budget cap.
+    llm_input_price_per_mtok_usd: float = 0.75
+    llm_output_price_per_mtok_usd: float = 3.75
 
-    # --- public demo limits ---------------------------------------------
-    rate_limit_per_minute: int = 5
-    rate_limit_per_day: int = 40
-    max_concurrent_llm_calls: int = 4
+    # --- public demo limits (sized for the Gemini free tier) -------------
+    rate_limit_per_minute: int = 3
+    rate_limit_per_day: int = 20
+    # Project-wide LLM call caps (free-tier quotas are per Google Cloud project).
+    # Set them at or below the limits AI Studio shows for your project.
+    llm_global_calls_per_minute: int = 5
+    llm_global_calls_per_day: int = 200
+    max_concurrent_llm_calls: int = 1
     llm_slot_ttl_s: int = 180
     daily_ai_budget_usd: float = 3.0
     daily_ingestion_budget_usd: float = 1.0

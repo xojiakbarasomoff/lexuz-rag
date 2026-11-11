@@ -219,3 +219,46 @@ def test_document_filter(corpus, settings):
     with pytest.raises(AnswerError) as e:
         answer_question(Q, document_ids=[uuid.uuid4()], deps=deps(settings, corpus, FakeLLMProvider()))
     assert e.value.code == "corpus_unavailable"
+
+
+def test_provider_quota_stops_further_calls(corpus, settings, redis_client):
+    """After a 429 the app answers with a clear error and does not hammer the free quota."""
+    calls = []
+
+    def quota(system, user):
+        calls.append(1)
+        raise LLMError("provider_quota", "RESOURCE_EXHAUSTED")
+
+    d = deps(settings, corpus, FakeLLMProvider(quota), redis_client)
+    with pytest.raises(AnswerError) as e:
+        answer_question(Q, document_ids=None, deps=d)
+    assert e.value.code == "provider_quota" and len(calls) == 1  # no retry, no repair
+    with pytest.raises(AnswerError) as e2:
+        answer_question(Q, document_ids=None, deps=d)
+    assert e2.value.code == "quota_exhausted" and len(calls) == 1  # blocked locally, not sent
+    st = Guards(redis_client, settings).budget_state()
+    assert st["reserved_usd"] == 0 and st["spent_usd"] == 0  # 429 is not billed
+
+
+def test_project_wide_call_cap(corpus, settings, redis_client):
+    llm = FakeLLMProvider(good_answer)
+    d = deps(settings, corpus, llm, redis_client, llm_global_calls_per_minute=1)
+    answer_question(Q, document_ids=None, deps=d)
+    with pytest.raises(AnswerError) as e:
+        answer_question(Q, document_ids=None, deps=d)
+    assert e.value.code == "quota_exhausted" and len(llm.calls) == 1
+
+
+def test_safety_block_returns_safe_status(corpus, settings):
+    def blocked(system, user):
+        raise LLMError("provider_blocked", "SAFETY", input_tokens=100)
+
+    r = answer_question(Q, document_ids=None, deps=deps(settings, corpus, FakeLLMProvider(blocked)))
+    assert r.status == "insufficient_evidence" and r.claims == [] and "xavfsizlik" in r.limitations[0]
+
+
+def test_empty_model_output_is_repaired_then_safe(corpus, settings):
+    llm = FakeLLMProvider(lambda s, u: "")
+    trace = AnswerTrace()
+    r = answer_question(Q, document_ids=None, deps=deps(settings, corpus, llm), trace=trace)
+    assert len(llm.calls) == 2 and trace.fallback and r.status == "insufficient_evidence"

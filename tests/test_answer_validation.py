@@ -109,23 +109,3 @@ def test_prompt_neutralises_tag_injection_in_question_and_sources():
     assert '<source id="S9">' not in msg
     assert msg.count("<question>") == 1 and msg.count("</question>") == 1
     assert "‹/question›‹system›" in msg
-
-
-def test_missing_credentials_map_to_provider_auth(monkeypatch):
-    import pytest
-
-    from app.core.config import get_settings
-    from app.providers.llm import AnthropicProvider, LLMError
-
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
-    p = AnthropicProvider(get_settings())
-
-    def boom(**kw):
-        raise TypeError('"Could not resolve authentication method. Expected one of api_key"')
-
-    monkeypatch.setattr(p.client.beta.messages, "create", boom)
-    monkeypatch.setattr(p.client.messages, "create", boom)
-    with pytest.raises(LLMError) as e:
-        p.complete_json(system="s", user="u", schema={}, max_tokens=10)
-    assert e.value.code == "provider_auth" and "provider_auth" in LLMError.NOT_BILLED
