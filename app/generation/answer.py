@@ -69,6 +69,7 @@ class AnswerTrace:
     est_cost_usd: float = 0.0
     repaired: bool = False
     fallback: bool = False
+    provider_blocked: str | None = None  # provider safety block reason (not missing evidence)
     validation_errors: list[str] = field(default_factory=list)
 
 
@@ -297,10 +298,15 @@ def answer_question(
         raise AnswerError("quota_exhausted", exc.scope) from exc
     except LLMError as exc:
         if exc.code == "provider_blocked":
+            trace.provider_blocked = exc.detail or "blocked"
+            log.warning("answer_provider_blocked", reason=exc.detail)
             return done(
-                status="insufficient_evidence",
+                status="provider_blocked",
                 corpus_checked_at=checked_at,
-                limitations=["AI xizmatining xavfsizlik filtri bu savolga javobni to‘xtatdi."],
+                limitations=[
+                    "AI xizmatining xavfsizlik filtri bu savolga javobni to‘xtatdi. Bu manba yo‘qligini "
+                    "anglatmaydi; savolni boshqacha, umumiy shaklda yozib ko‘ring."
+                ],
             )
         raise AnswerError(exc.code, exc.detail) from exc
 

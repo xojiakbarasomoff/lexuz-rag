@@ -15,7 +15,7 @@ and the app never switches to a paid model or provider by itself.
    Terms, API use is a *Paid Service* only through a project with an active
    billing account; without billing it is the unpaid quota.
 4. In AI Studio, open the rate-limit view for the project and note the free
-   limits for `gemini-3.8-flash` (RPM / TPM / RPD). Google publishes them only
+   limits for `gemini-3.5-flash-lite` (RPM / TPM / RPD). Google publishes them only
    there; the docs give no fixed numbers.
 5. Some imported/externally created projects need verification before they
    can use the free tier; AI Studio says so if it applies.
@@ -33,7 +33,7 @@ Open `.env` in an editor and set:
 ```
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=<paste the key here>
-LLM_MODEL=gemini-3.8-flash
+LLM_MODEL=gemini-3.5-flash-lite
 LLM_GLOBAL_CALLS_PER_MINUTE=<at or below the RPM AI Studio shows>
 LLM_GLOBAL_CALLS_PER_DAY=<at or below the RPD AI Studio shows>
 ```
@@ -68,12 +68,13 @@ https://aistudio.google.com/docs/pricing (“Used to improve our products: Yes�
 
 ## 4. Quota and cost behaviour
 
-- Model: `gemini-3.8-flash` (stable). Free tier: input and output “Free of
-  charge”. Paid list price, used only as a conservative estimate:
-  $0.75 / 1M input, $3.75 / 1M output incl. thinking tokens until 2026-12-31
-  ($1.50 / $7.50 from 2027-01-01).
+- Model: `gemini-3.5-flash-lite` (stable). Free tier: input and output “Free
+  of charge”. Paid list price, used only as a conservative estimate:
+  $0.30 / 1M input, $2.50 / 1M output incl. thinking tokens.
+  (`gemini-3.8-flash` is visible to the key but returned 504 DEADLINE_EXCEEDED
+  even for a tiny request on 2026-11-11 — decision D20.)
 - Thinking tokens count as output and against `LLM_MAX_OUTPUT_TOKENS`
-  (2048). Thinking level `low` (`minimal` is not accepted by this model).
+  (2048). Thinking level `minimal` (the model default).
 - SDK retries: at most one, only on HTTP 5xx; **never on 429**.
 - On a 429 / `RESOURCE_EXHAUSTED` the app returns “Bepul AI kvotasi hozircha
   tugagan…” and blocks further provider calls for 2 minutes. Daily quotas

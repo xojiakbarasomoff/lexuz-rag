@@ -67,12 +67,12 @@ def test_request_uses_json_schema_no_tools_and_bounded_thinking(provider):
     res = provider.complete_json(system="SYS", user="USER", schema=OUTPUT_SCHEMA, max_tokens=2048)
     call = provider.client.models.calls[0]
     cfg = call["config"]
-    assert call["model"] == "gemini-3.8-flash" and call["contents"] == "USER"
+    assert call["model"] == "gemini-3.5-flash-lite" and call["contents"] == "USER"
     assert cfg.response_mime_type == "application/json" and cfg.response_json_schema == OUTPUT_SCHEMA
     assert cfg.system_instruction == "SYS"
     assert not cfg.tools and not cfg.automatic_function_calling  # no tools, no search grounding
     assert cfg.max_output_tokens == 2048
-    assert cfg.thinking_config.thinking_level == types.ThinkingLevel.LOW
+    assert cfg.thinking_config.thinking_level == types.ThinkingLevel.MINIMAL
     # thinking tokens are billed as output
     assert (res.input_tokens, res.output_tokens, res.thinking_tokens) == (1200, 230, 80)
 

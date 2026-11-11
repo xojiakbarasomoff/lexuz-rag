@@ -8,7 +8,10 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.core.config import get_settings
 
-AnswerStatus = Literal["answered", "insufficient_evidence", "clarification_needed"]
+# API-level status. The LLM output schema still has only the first three;
+# "provider_blocked" is set by the backend when the provider's safety filter
+# blocked the request/answer — a different situation from missing sources.
+AnswerStatus = Literal["answered", "insufficient_evidence", "clarification_needed", "provider_blocked"]
 
 
 class AskRequest(BaseModel):

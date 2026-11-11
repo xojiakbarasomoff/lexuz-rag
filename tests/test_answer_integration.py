@@ -254,7 +254,7 @@ def test_safety_block_returns_safe_status(corpus, settings):
         raise LLMError("provider_blocked", "SAFETY", input_tokens=100)
 
     r = answer_question(Q, document_ids=None, deps=deps(settings, corpus, FakeLLMProvider(blocked)))
-    assert r.status == "insufficient_evidence" and r.claims == [] and "xavfsizlik" in r.limitations[0]
+    assert r.status == "provider_blocked" and r.claims == [] and "xavfsizlik" in r.limitations[0]
 
 
 def test_empty_model_output_is_repaired_then_safe(corpus, settings):

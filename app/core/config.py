@@ -79,21 +79,22 @@ class Settings(BaseSettings):
     llm_provider: Literal["gemini", "fake"] = "gemini"
     # Read from GEMINI_API_KEY. SecretStr: never printed in reprs, logs or errors.
     gemini_api_key: SecretStr | None = None
-    # Stable Flash model with a free tier and structured output, verified on
-    # https://aistudio.google.com/docs/models and /docs/pricing (docs/decisions.md D17).
-    llm_model: str = "gemini-3.8-flash"
-    # gemini-3.8-flash accepts low|medium|high (minimal is rejected); thinking tokens count as output.
-    llm_thinking_level: Literal["minimal", "low", "medium", "high"] = "low"
+    # Stable Flash-Lite model with a free tier and structured output, verified on
+    # https://aistudio.google.com/docs/models and /docs/pricing, and with the project key
+    # on 2026-11-11 (gemini-3.8-flash returned 504 DEADLINE_EXCEEDED). See docs/decisions.md D20.
+    llm_model: str = "gemini-3.5-flash-lite"
+    # Model default is "minimal"; thinking tokens count as output. (gemini-3.8-flash rejects "minimal".)
+    llm_thinking_level: Literal["minimal", "low", "medium", "high"] = "minimal"
     # Hard cap per call, INCLUDING thinking tokens.
     llm_max_output_tokens: int = 2048
     llm_timeout_s: float = 60.0
     # SDK retries on 5xx only (never on 429). Each retry is reserved in the budget.
     llm_max_retries: int = 1
-    # Paid-tier list price of gemini-3.8-flash until 2026-12-31 (USD / 1M tokens).
+    # Paid-tier list price of gemini-3.5-flash-lite (USD / 1M tokens, text input).
     # On the free tier nothing is charged; these figures give a conservative
     # "paid-equivalent" estimate and drive the budget cap.
-    llm_input_price_per_mtok_usd: float = 0.75
-    llm_output_price_per_mtok_usd: float = 3.75
+    llm_input_price_per_mtok_usd: float = 0.30
+    llm_output_price_per_mtok_usd: float = 2.50
 
     # --- public demo limits (sized for the Gemini free tier) -------------
     rate_limit_per_minute: int = 3

@@ -137,3 +137,25 @@ human reviewers; personal/confidential data must not be submitted; users must
 be 18+; free-tier API clients must not be offered to EEA/CH/UK users. The UI
 shows a short notice, raw questions are not logged, and a public launch is
 blocked until EEA/CH/UK access is restricted (docs/llm-setup.md).
+
+### D20. Default model changed to `gemini-3.5-flash-lite` after testing with the real key
+On 2026-11-11, with the project's free-tier key:
+- `models.get("gemini-3.8-flash")` succeeded (Gemini 3.8 Flash, 1,048,576 input /
+  65,536 output tokens, `generateContent` supported), but our request and then a
+  tiny structured-output probe both failed: the app's call hit the 60 s client
+  timeout, the probe got `504 DEADLINE_EXCEEDED` after ~178 s. Only those two
+  calls were made; no retry loop.
+- The same tiny probe on `gemini-3.5-flash-lite` (stable, free tier per the
+  pricing page) returned valid JSON in 1.2 s.
+- Default is now `gemini-3.5-flash-lite`, thinking level `minimal` (model
+  default), paid-equivalent price $0.30 / $2.50 per 1M for estimates. Still
+  free tier only, no automatic fallback between models at runtime: switching
+  back to 3.8 Flash is a config change (`LLM_MODEL`, `LLM_THINKING_LEVEL=low`,
+  prices) after it is verified to respond.
+
+### D21. Provider safety blocks are a separate API status
+`provider_blocked` (API response only; the LLM output schema keeps its three
+statuses) is returned when Gemini's safety filter blocks the prompt or the
+answer. It is not merged into `insufficient_evidence`, because a block says
+nothing about whether the sources cover the question. Evals count it
+separately.

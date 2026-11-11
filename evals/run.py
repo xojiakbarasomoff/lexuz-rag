@@ -391,6 +391,7 @@ def cmd_answers(args) -> int:
                 "first_try_valid": not trace.repaired,
                 "repaired": trace.repaired,
                 "fallback": trace.fallback,
+                "provider_block_reason": trace.provider_blocked,
                 "input_tokens": trace.input_tokens,
                 "output_tokens": trace.output_tokens,
                 "est_cost_usd": round(trace.est_cost_usd, 5),
@@ -443,6 +444,8 @@ def cmd_answers(args) -> int:
         lines += [f"- cited {x['id']} = {x['article']}" for x in r["sources"]]
         lines.append(f"- expected articles: {r['expected']}")
         lines += [f"- validation error: {e}" for e in r["validation_errors"][:6]]
+        if r.get("provider_block_reason"):
+            lines.append(f"- provider block reason: {r['provider_block_reason']}")
         return [*lines, ""]
 
     sections = [
@@ -459,6 +462,10 @@ def cmd_answers(args) -> int:
             ],
         ),
         ("Needed a repair call (first output failed validation)", [r for r in rows if r["repaired"]]),
+        (
+            "Provider safety blocks (not the same as missing evidence)",
+            [r for r in rows if r["status"] == "provider_blocked"],
+        ),
         ("Status errors - full detail", [r for r in rows if not r["status_correct"]]),
     ]
     for title, sel in sections:
@@ -494,6 +501,10 @@ def _answer_summary(rows: list[dict]) -> dict:
         "claim_citation_coverage": round(sum(r["claims_with_sources"] for r in rows) / claims, 3) if claims else None,
         "first_try_valid_rate": round(sum(r["first_try_valid"] for r in rows) / n, 3),
         "fallback_rate": round(sum(r["fallback"] for r in rows) / n, 3),
+        # Provider safety blocks are counted separately from abstentions.
+        "provider_blocked": sum(1 for r in rows if r["status"] == "provider_blocked"),
+        "insufficient_evidence_returned": sum(1 for r in rows if r["status"] == "insufficient_evidence"),
+        "clarification_returned": sum(1 for r in rows if r["status"] == "clarification_needed"),
         "errors": sum(1 for r in rows if r["error"]),
         "latency_ms_p50": percentile(lat, 50),
         "latency_ms_p95": percentile(lat, 95),

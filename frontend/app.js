@@ -6,6 +6,7 @@ const ALLOWED_LINK = /^https:\/\/(www\.)?lex\.uz\//;
 const STATUS_TEXT = {
   insufficient_evidence: "Manbalarda yetarli maʼlumot topilmadi",
   clarification_needed: "Savolni aniqlashtirish kerak",
+  provider_blocked: "AI xizmatining xavfsizlik filtri javobni to‘xtatdi",
 };
 
 const $ = (sel) => document.querySelector(sel);
