@@ -41,7 +41,7 @@ Cost: CPU time (≈ 38 min to index the Labor Code on a laptop) and a 687 MB
 image + 2.2 GB model download. An API embedding adapter can be added behind
 the same interface; it must go through the ingestion budget.
 
-### D9. Claude via the official `anthropic` SDK, structured JSON output, no tools
+### D9. Claude via the official `anthropic` SDK, structured JSON output, no tools — *superseded by D17*
 Originally `claude-opus-5-5`; since D15 the default is `claude-haiku-5-5`. Effort `low`, configurable (`LLM_MODEL`,
 `LLM_EFFORT`, prices). A cheaper model (e.g. `claude-haiku-5-5`) can be set
 by env; that choice should be made after a live eval on dev. Server-side
@@ -77,7 +77,7 @@ uvicorn `--forwarded-allow-ips` is set to nginx's fixed container IP; nginx
 overwrites `X-Forwarded-For` with `$remote_addr`. Clients cannot spoof their
 rate-limit identity.
 
-### D15. Default LLM: `claude-haiku-5-5` (verified 2026-11-11)
+### D15. Default LLM: `claude-haiku-5-5` (verified 2026-11-11) — *superseded by D17*
 Checked on the official docs (platform.claude.com: models overview, pricing,
 structured outputs). Current API IDs: `claude-opus-5-5`, `claude-sonnet-5-5`,
 `claude-haiku-5-5` (all active; retirement not before Sep–Oct 2027). All three
@@ -98,3 +98,42 @@ Worst-case reservation = (estimated input × 1.3 + max output) × prices ×
 (1 + `LLM_MAX_RETRIES`), so a retried request cannot exceed the cap. The
 answer eval uses its own Redis budget scope with `--max-cost-usd` as the limit;
 a call whose reservation is refused is never sent and the run stops.
+
+### D17. Generation moved to Google Gemini API (`gemini-3.8-flash`, free tier)
+Decision by the project owner: the app's LLM provider is Gemini; Anthropic
+code, settings and the `anthropic` dependency were removed. Verified on
+2026-11-11 (ai.google.dev now redirects to aistudio.google.com/docs):
+- SDK: `google-genai` (3.1.0 locked); the old `google-generativeai` is
+  deprecated (libraries page). Call: `client.models.generate_content` with
+  `response_mime_type="application/json"` + `response_json_schema` (SDK field
+  docs list the supported keywords; ours — `type`, `properties`, `required`,
+  `items`, `enum`, `additionalProperties` — are all supported).
+- Model: `gemini-3.8-flash` is marked **Stable** on the models page, has a
+  free tier (“Free of charge” input/output on the pricing page), thinking
+  levels low/medium/high (default medium; `minimal` rejected). Paid list price
+  $0.75 / $3.75 per 1M (through 2026-12-31), output price includes thinking.
+- Alternative: `gemini-3.5-flash-lite` (stable, free tier, default thinking
+  `minimal`, paid $0.30 / $2.50). Switch via `LLM_MODEL` + prices +
+  `LLM_THINKING_LEVEL=minimal` if 3.8 Flash quota or latency is a problem.
+- `gemini-2.5-flash` is deprecated (auto-routed to 3.5 Flash-Lite from
+  2026-12-01) and is not used.
+- No tools: no `tools`, no Google Search grounding, no function calling.
+- Usage: `prompt_token_count` → input; `candidates_token_count +
+  thoughts_token_count` → output (both billed as output on paid tiers).
+
+### D18. Free tier only; no automatic paid fallback
+The free tier is the only supported mode. There is no fallback to another
+model/provider. Free-tier numeric limits are shown only in AI Studio, so the
+app has its own project-wide caps (`LLM_GLOBAL_CALLS_PER_MINUTE=5`,
+`LLM_GLOBAL_CALLS_PER_DAY=200`, counted in Pacific days like Google's RPD),
+`MAX_CONCURRENT_LLM_CALLS=1`, per-IP 3/min and 20/day, 2048 output tokens.
+A 429 is never retried; it sets a 2-minute block in Redis. Budget accounting
+uses paid-equivalent prices as a conservative ceiling even though the free
+tier is not charged.
+
+### D19. Data-use constraints of the free tier
+Unpaid-service content may be used by Google to improve products and read by
+human reviewers; personal/confidential data must not be submitted; users must
+be 18+; free-tier API clients must not be offered to EEA/CH/UK users. The UI
+shows a short notice, raw questions are not logged, and a public launch is
+blocked until EEA/CH/UK access is restricted (docs/llm-setup.md).

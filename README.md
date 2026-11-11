@@ -5,6 +5,13 @@ from [Lex.uz](https://lex.uz). A user asks one question; the system finds the
 relevant articles and answers in Uzbek (Latin) with citations that link to the
 exact article on Lex.uz.
 
+> **Free-tier service:** answers use the Gemini API free tier. When the free
+> quota is used up, answering is temporarily unavailable (“Bepul AI kvotasi
+> hozircha tugagan…”); the document list keeps working. Questions are sent to
+> Google and, on the free tier, may be used to improve Google products and be
+> read by human reviewers — do not enter personal or confidential data.
+> Not yet allowed for users in the EEA, Switzerland or the UK (free-tier terms).
+
 > **Not an official Lex.uz product** and not affiliated with the Ministry of
 > Justice of Uzbekistan. It explains sources; it is not legal advice.
 
@@ -15,11 +22,11 @@ exact article on Lex.uz.
 | Corpus | ✅ Labor Code (593 articles) and Consumer Protection Law (33 articles), Uzbek Latin. Consumer law: live fetch. Labor Code: local import of the official page (live fetch hit a DNS failure), later **confirmed identical by a live fetch**. |
 | Ingestion | ✅ fetch → snapshot → parse → publish gate → chunk → embed → atomic activation; idempotent; CLI + Celery |
 | Retrieval | ✅ hybrid (pgvector + PostgreSQL FTS + article-number match, weighted RRF); evaluated on real data |
-| Answer generation | ✅ implemented (default `claude-haiku-5-5`, ID and price verified on the official docs; structured JSON, citation/quote validation, repair, fallback) and tested with a fake LLM. ⚠️ **Not yet run against the real API** — no API key yet ([setup](docs/llm-setup.md)). **Answer quality is unmeasured, so the project is not ready.** |
+| Answer generation | ✅ implemented with the **Google Gemini API, free tier only** (`gemini-3.8-flash`, verified on Google's docs; `google-genai` SDK; structured JSON, no tools; citation/quote validation, repair, fallback; quota/safety/timeout handling) and tested offline with SDK types + a fake LLM. ⚠️ **Not yet run against the real API** — no `GEMINI_API_KEY` yet ([setup](docs/llm-setup.md)). **Answer quality is unmeasured, so the project is not ready.** |
 | Rate limit / budget | ✅ Redis Lua, tested with real Redis incl. 20-thread race and Redis outage |
 | Frontend | ✅ single static page, Uzbek UI, text-only rendering, XSS test |
 | Tests / CI | ✅ 77 tests (unit + PostgreSQL/pgvector + Redis integration, frontend XSS). ✅ GitHub Actions CI green on 2026-11-11 (ruff, migrations up/check/down/up, tests, Docker build): https://github.com/xojiakbarasomoff/lexuz-rag/actions/runs/42970636910 |
-| Eval | ✅ 50-item benchmark (AI-drafted, **not human-verified**; review sheet in `evals/review/`, status `not_reviewed`); retrieval results below. ⚠️ answer-level eval not run (needs API key); it is capped at $1 incl. repairs and retries |
+| Eval | ✅ 50-item benchmark (AI-drafted, **not human-verified**; review sheet in `evals/review/`, status `not_reviewed`); retrieval results below. ⚠️ answer-level eval not run (needs a key); it is paced, checkpointed/resumable and capped at $1 paid-equivalent incl. repairs and retries |
 | Deployment / CD | ⚠️ configs and scripts ready and locally validated; CD workflow runs after CI and currently skips with a notice (no `DEPLOY_HOST`). **Not deployed** — no VPS, domain or secrets |
 | Live URL | none yet |
 | Demo video | not recorded |
@@ -38,7 +45,7 @@ flowchart LR
   U[Browser] -->|HTTPS| N[nginx] --> A[FastAPI]
   A --> P[(PostgreSQL + pgvector)]
   A --> R[(Redis: limits, budget)]
-  A -->|JSON, no tools| L[Claude]
+  A -->|JSON, no tools| L[Gemini API, free tier]
   B[Celery beat] --> W[Celery worker] -->|allow-listed| X[lex.uz]
   W --> P
 ```
@@ -55,7 +62,7 @@ Details: [docs/architecture.md](docs/architecture.md) ·
 Requirements: Docker, [uv](https://docs.astral.sh/uv/), Python 3.12.
 
 ```bash
-cp .env.example .env            # set POSTGRES_PASSWORD, DATABASE_URL, (optional) ANTHROPIC_API_KEY
+cp .env.example .env            # set POSTGRES_PASSWORD, DATABASE_URL, (optional) GEMINI_API_KEY
 docker compose up -d postgres redis
 uv sync --extra local-embeddings
 uv run alembic upgrade head
@@ -68,7 +75,7 @@ Everything in Docker: `docker compose up -d --build`, then
 `docker compose exec api alembic upgrade head` and
 `docker compose exec worker python -m app.cli ingest all`.
 
-Without `ANTHROPIC_API_KEY` the catalog, retrieval eval and UI work; `/ask`
+Without `GEMINI_API_KEY` the catalog, retrieval eval and UI work; `/ask`
 returns `provider_auth` (“AI xizmati sozlanmagan”).
 
 ## Ingestion
@@ -154,9 +161,15 @@ SSH with backup → migrate → smoke check → app rollback. Step-by-step:
   does not prove the answer interprets them correctly.
 - Amendments that enter into force in the future block automatic activation
   until a human reviews them.
-- Question text is not logged by default; IPs are hashed for rate limiting.
-- Public demo limits: per-IP minute/day limits, global concurrent LLM calls,
-  600-char questions, output-token cap, daily estimated AI budget; generation
+- Question text is not logged; IPs are hashed for rate limiting. On the
+  Gemini free tier Google may use prompts/responses to improve its products
+  and human reviewers may read them (Gemini API Additional Terms) — the UI
+  asks users not to enter personal data; 18+ only.
+- Free-tier quota limits (set in AI Studio, reset daily at midnight Pacific)
+  can make answering temporarily unavailable; there is no paid fallback.
+- Public demo limits: per-IP 3/min and 20/day, one concurrent LLM call,
+  project-wide 5 calls/min and 200/day, 600-char questions, 2048 output
+  tokens (incl. thinking), daily paid-equivalent budget; generation
   closes if Redis is unavailable. Cost figures are estimates.
 
 ## License of the data

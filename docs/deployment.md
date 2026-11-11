@@ -41,7 +41,7 @@ SSH: key-only login (`PasswordAuthentication no`), no root login.
 ```
 
 `.env` (production) — start from `.env.example` and set at least:
-`APP_IMAGE`, `DOMAIN`, `POSTGRES_PASSWORD`, `ANTHROPIC_API_KEY`,
+`APP_IMAGE`, `DOMAIN`, `POSTGRES_PASSWORD`, `GEMINI_API_KEY` (free-tier project, no billing),
 `CORS_ORIGINS=[]`, `METRICS_TOKEN`, `DAILY_AI_BUDGET_USD`, `ENABLE_API_DOCS`.
 
 Images are pulled from `ghcr.io/<owner>/lexuz-rag:<git-sha>`. Make the package

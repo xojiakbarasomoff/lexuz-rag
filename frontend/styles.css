@@ -76,3 +76,4 @@ details.source blockquote { margin: 10px 0; padding: 8px 12px; border-left: 3px 
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 .site-footer { font-size: 0.85rem; color: var(--muted); padding-bottom: 32px; }
+.privacy-note { margin: 8px 0 0; font-size: 0.88rem; color: var(--muted); }

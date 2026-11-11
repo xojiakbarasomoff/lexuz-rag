@@ -61,8 +61,8 @@ or ignore.
   and are counted as spent.
 - `DAILY_AI_BUDGET_USD` (public) and `DAILY_INGESTION_BUDGET_USD` are separate.
 - All figures use configured prices and are **estimates**; set a hard limit in
-  the provider console as well (Anthropic Console → Settings → Limits: monthly
-  spend limit for the workspace/key used here) so a bug cannot exceed it.
+  nothing is charged while the Gemini project has no billing account — keep it
+  that way (free tier only, docs/llm-setup.md).
 - Redis down → `/ask` closed (fail closed).
 
 ## External monitoring (to set up)

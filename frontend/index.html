@@ -29,8 +29,11 @@
       <h2 id="ask-h" class="visually-hidden">Savol</h2>
       <form id="ask-form" novalidate>
         <label for="question">Savolingiz</label>
-        <textarea id="question" name="question" rows="3" maxlength="600" required
+        <textarea id="question" name="question" rows="3" maxlength="600" required aria-describedby="privacy-note"
                   placeholder="Masalan: Sinov muddati davomida ishdan bo‘shash mumkinmi?"></textarea>
+        <p id="privacy-note" class="privacy-note">Shaxsiy yoki maxfiy maʼlumot (ism, telefon, pasport yoki hujjat raqami va h.k.) yozmang.
+          Savollar bepul Gemini API orqali qayta ishlanadi: Google ularni mahsulotlarini yaxshilash uchun ishlatishi va
+          xodimlari ko‘rib chiqishi mumkin. Faqat 18 yoshdan kattalar uchun.</p>
         <div class="form-row">
           <span id="char-count" class="muted" aria-live="polite">0 / 600</span>
           <button id="submit" type="submit">Yuborish</button>

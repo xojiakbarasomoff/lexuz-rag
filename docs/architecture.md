@@ -9,7 +9,7 @@ flowchart LR
   N -.->|/internal/* blocked| X((404))
   A --> P[(PostgreSQL + pgvector)]
   A --> R[(Redis: rate limit, budget, LLM slots)]
-  A -->|structured JSON, no tools| L[Claude API]
+  A -->|structured JSON, no tools| L[Gemini API free tier]
   A -->|query embedding| E[fastembed ONNX model, in-process]
   B[Celery beat] -->|weekly| Q[(Redis broker)]
   Q --> W[Celery worker: ingestion]
@@ -35,7 +35,7 @@ flowchart LR
 | `app/ingestion/` | sources allow-list, fetcher, Lex.uz parser, publish gate, chunker, pipeline |
 | `app/retrieval/` | Uzbek normalization, hybrid search, fusion, context assembly |
 | `app/generation/` | prompt, output validation, answer orchestration |
-| `app/providers/` | LLM (Anthropic, fake) and embedding (fastembed, hashing) adapters |
+| `app/providers/` | LLM (Gemini, fake) and embedding (fastembed, hashing) adapters |
 | `app/api/` | FastAPI app, error catalog |
 | `app/tasks/` | Celery app and tasks |
 | `app/observability/` | Prometheus metrics |
@@ -65,7 +65,7 @@ erDiagram
 1. nginx rate limit → FastAPI validation (length ≤ 600) → Redis per-IP limit.
 2. Hybrid retrieval over active versions (see retrieval-and-citations.md).
 3. If nothing relevant: `insufficient_evidence` without calling the LLM.
-4. Acquire an LLM slot, reserve worst-case cost, call Claude with JSON schema.
+4. Acquire an LLM slot, check project-wide free-tier caps, reserve worst-case cost, call Gemini with a JSON schema.
 5. Validate ids/quotes; at most one repair call; otherwise safe fallback.
 6. Build `sources` from database rows (title, label, URL, version, checked time).
 

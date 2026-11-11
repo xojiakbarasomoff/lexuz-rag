@@ -30,7 +30,7 @@ active corpus (0 problems on 2026-11-11). No human legal review has been done.
 ```bash
 python -m app.cli eval check                          # benchmark ↔ corpus consistency
 python -m app.cli eval retrieval --split dev          # no AI calls (local embeddings)
-python -m app.cli eval answers --split dev --max-cost-usd 1.0   # LIVE, needs ANTHROPIC_API_KEY
+python -m app.cli eval answers --split dev --max-cost-usd 1.0   # LIVE, needs GEMINI_API_KEY; paced, checkpointed, --resume
 ```
 
 CI never runs `answers`. Holdout is run only after a tuning round is finished.
@@ -86,7 +86,7 @@ Reading these numbers honestly:
   at rank ~6–18 depending on weights), everyday-language resignation question
   (160), one of two articles of a multi-article question (173), a heavily
   padded injection question (130).
-- **Answer-level metrics: not yet measured.** No `ANTHROPIC_API_KEY` was
+- **Answer-level metrics: not yet measured.** No `GEMINI_API_KEY` was
   available in the build environment, so `eval answers` has not been run and
   no answer-quality, cost or end-to-end latency numbers exist yet
   (setup: docs/llm-setup.md). The project is not "ready" until it is.
