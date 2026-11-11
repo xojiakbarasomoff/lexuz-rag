@@ -40,9 +40,11 @@ for child in cont.iter():
     if keep_current or (cls and cls[0] == "TEXT_HEADER_DEFAULT"):
         kept.append(child.html)
 
-doc = (f"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>{title}</title></head><body>"
-       f"<div class=\"lx_menu\">NAVIGATION MENU (must not be parsed)</div>{header}"
-       f"<div class=\"dropdown-menu\">{''.join(editions)}</div>"
-       f"<div id=\"divBody\"><div id=\"divCont\">{''.join(kept)}</div></div></body></html>")
+doc = (
+    f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>{title}</title></head><body>'
+    f'<div class="lx_menu">NAVIGATION MENU (must not be parsed)</div>{header}'
+    f'<div class="dropdown-menu">{"".join(editions)}</div>'
+    f'<div id="divBody"><div id="divCont">{"".join(kept)}</div></div></body></html>'
+)
 Path(a.out).write_text(doc, encoding="utf-8", newline="\n")
 print("raw sha256", hashlib.sha256(raw.encode("utf-8")).hexdigest(), "kept elements", len(kept))

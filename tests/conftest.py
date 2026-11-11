@@ -66,8 +66,12 @@ def db(migrated_db):
     from app.db.session import get_engine
 
     with get_engine().begin() as c:
-        c.execute(text("TRUNCATE usage_events, ingestion_jobs, chunk_embeddings, chunks, articles, "
-                       "document_versions, documents RESTART IDENTITY CASCADE"))
+        c.execute(
+            text(
+                "TRUNCATE usage_events, ingestion_jobs, chunk_embeddings, chunks, articles, "
+                "document_versions, documents RESTART IDENTITY CASCADE"
+            )
+        )
     yield
 
 

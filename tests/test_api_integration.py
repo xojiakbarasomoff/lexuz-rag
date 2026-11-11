@@ -27,12 +27,23 @@ def client(db, redis_client, monkeypatch, settings):
 
     monkeypatch.setitem(sources.SOURCES, KEY, replace(sources.SOURCES[KEY], min_articles=3))
     emb = HashingEmbeddingProvider(settings)
-    ingest_source(KEY, raw=RawSource(fixture_html("lexuz_consumer_excerpt.html").encode(),
-                                     datetime(2026, 11, 11, 5, tzinfo=UTC), "local_import",
-                                     {"url": "https://lex.uz/docs/-4704"}),
-                  settings=settings, embedder=emb, now=datetime(2026, 11, 11, tzinfo=UTC))
-    monkeypatch.setattr(answer_mod, "_default_deps",
-                        answer_mod.Deps(settings, FakeLLMProvider(good_answer), emb, Guards(redis_client, settings)))
+    ingest_source(
+        KEY,
+        raw=RawSource(
+            fixture_html("lexuz_consumer_excerpt.html").encode(),
+            datetime(2026, 11, 11, 5, tzinfo=UTC),
+            "local_import",
+            {"url": "https://lex.uz/docs/-4704"},
+        ),
+        settings=settings,
+        embedder=emb,
+        now=datetime(2026, 11, 11, tzinfo=UTC),
+    )
+    monkeypatch.setattr(
+        answer_mod,
+        "_default_deps",
+        answer_mod.Deps(settings, FakeLLMProvider(good_answer), emb, Guards(redis_client, settings)),
+    )
     return TestClient(app)
 
 
@@ -58,8 +69,16 @@ def test_ask_happy_path_shape_and_no_internal_leak(client):
     r = client.post("/api/v1/ask", json={"question": "Isteʼmolchi kim?"})
     assert r.status_code == 200, r.text
     body = r.json()
-    assert set(body) == {"request_id", "status", "claims", "sources", "clarifying_question", "limitations",
-                         "corpus_checked_at", "latency_ms"}
+    assert set(body) == {
+        "request_id",
+        "status",
+        "claims",
+        "sources",
+        "clarifying_question",
+        "limitations",
+        "corpus_checked_at",
+        "latency_ms",
+    }
     assert body["status"] == "answered" and body["sources"][0]["source_url"].startswith("https://lex.uz/")
     assert "untrusted" not in r.text and "<sources>" not in r.text  # no prompt/context leak
     assert r.headers["X-Request-ID"] == body["request_id"]

@@ -1,10 +1,11 @@
 """Rate limit, concurrency slots and budget reservation against real Redis."""
 
 import threading
+
 import pytest
 import redis
 
-from app.core.limits import BudgetExceeded, Busy, GuardUnavailable, Guards, RateLimited
+from app.core.limits import BudgetExceeded, Busy, Guards, GuardUnavailable, RateLimited
 
 pytestmark = pytest.mark.integration
 
@@ -82,8 +83,9 @@ def test_crashed_reservation_expires_as_spent(redis_client, settings):
 
 
 def test_ingestion_has_a_separate_budget(redis_client, settings):
-    g = guards(redis_client, settings.model_copy(update={"daily_ai_budget_usd": 0.1,
-                                                         "daily_ingestion_budget_usd": 1.0}))
+    g = guards(
+        redis_client, settings.model_copy(update={"daily_ai_budget_usd": 0.1, "daily_ingestion_budget_usd": 1.0})
+    )
     g.reserve("ing", 0.5, scope="ingestion")
     with pytest.raises(BudgetExceeded):
         g.reserve("pub", 0.5, scope="public")

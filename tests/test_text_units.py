@@ -13,8 +13,14 @@ from app.retrieval.search import Candidate, article_refs, build_tsquery, rrf_fus
 
 
 def _chunks(paragraphs, **kw):
-    return chunk_article(doc_short_name="Mehnat kodeksi", label="130", title="Dastlabki sinov muddati",
-                         heading_context="MAXSUS QISM › 13-bob", paragraphs=paragraphs, **kw)
+    return chunk_article(
+        doc_short_name="Mehnat kodeksi",
+        label="130",
+        title="Dastlabki sinov muddati",
+        heading_context="MAXSUS QISM › 13-bob",
+        paragraphs=paragraphs,
+        **kw,
+    )
 
 
 def test_short_article_is_one_chunk_with_header():

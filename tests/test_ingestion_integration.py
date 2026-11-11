@@ -34,13 +34,18 @@ class CountingEmbedder(HashingEmbeddingProvider):
 
 
 def raw(html: str, when="2026-11-11T05:00:00+00:00") -> RawSource:
-    return RawSource(body=html.encode(), fetched_at=datetime.fromisoformat(when), source_kind="local_import",
-                     provenance={"url": "https://lex.uz/docs/-4704", "note": "test fixture"})
+    return RawSource(
+        body=html.encode(),
+        fetched_at=datetime.fromisoformat(when),
+        source_kind="local_import",
+        provenance={"url": "https://lex.uz/docs/-4704", "note": "test fixture"},
+    )
 
 
 def run(html, settings, embedder, **kw):
-    return ingest_source(KEY, raw=raw(html, **kw), settings=settings, embedder=embedder,
-                         now=datetime(2026, 11, 11, tzinfo=UTC))
+    return ingest_source(
+        KEY, raw=raw(html, **kw), settings=settings, embedder=embedder, now=datetime(2026, 11, 11, tzinfo=UTC)
+    )
 
 
 def _active(s):
@@ -128,7 +133,8 @@ def test_future_amendment_requires_manual_review_synthetic(db, small_source, set
     emb = CountingEmbedder(settings)
     good = run(fixture_html("lexuz_consumer_excerpt.html"), settings, emb)
     future = fixture_html("lexuz_consumer_excerpt.html").replace(
-        "Kuchga kirish sanasi — 2025-yil 2-noyabr", "Kuchga kirish sanasi — 2027-yil 1-yanvar")
+        "Kuchga kirish sanasi — 2025-yil 2-noyabr", "Kuchga kirish sanasi — 2027-yil 1-yanvar"
+    )
     res = run(future, settings, emb)
     assert res.status == "needs_review"
     doc, _ = _active(None)
@@ -174,7 +180,11 @@ def test_vectors_are_scoped_by_embedding_space(db, small_source, settings):
     other = CountingEmbedder(settings)
     other.space = "other:model:64"
     with get_sessionmaker()() as s:
-        assert s.scalar(select(func.count()).select_from(ChunkEmbedding)
-                        .where(ChunkEmbedding.embedding_space == other.space)) == 0
+        assert (
+            s.scalar(
+                select(func.count()).select_from(ChunkEmbedding).where(ChunkEmbedding.embedding_space == other.space)
+            )
+            == 0
+        )
         res = retrieve(s, "zzzzqqq", settings, other)  # no vectors in this space, no lexical hit
     assert res.articles == []
