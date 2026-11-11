@@ -1,0 +1,54 @@
+[project]
+name = "lexuz-rag"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.1",
+    "anthropic>=2.8.0",
+    "celery>=5.7.0",
+    "fastapi>=0.162.4",
+    "httpx>=0.28.1",
+    "numpy>=2.5.4",
+    "pgvector>=0.5.1",
+    "prometheus-client>=0.26.0",
+    "psycopg[binary]>=3.3.8",
+    "pydantic>=2.14.3",
+    "pydantic-settings>=2.16.2",
+    "redis>=8.1.0",
+    "selectolax>=1.0.2",
+    "sqlalchemy>=2",
+    "structlog>=26.1.0",
+    "tzdata>=2026.6",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.optional-dependencies]
+local-embeddings = [
+    "fastembed>=0.9.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.4",
+]
+
+[project.scripts]
+lexuz = "app.cli:main"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = ["S101", "S311", "RUF001", "RUF002", "RUF003", "RUF012", "RUF046", "B008", "S608", "S324", "SIM102", "SIM105"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B"]
+"evals/**" = ["S"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs PostgreSQL+pgvector and Redis"]

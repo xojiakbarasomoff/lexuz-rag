@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LexUZ RAG — qonunlar bo‘yicha manbali javoblar</title>
+  <meta name="description" content="O‘zbekiston qonunlari bo‘yicha manbaga asoslangan javoblar (demo). Lex.uz’ning rasmiy mahsuloti emas.">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#question">Savolga o‘tish</a>
+  <header class="site-header">
+    <div class="wrap">
+      <h1>LexUZ RAG</h1>
+      <p class="lead">O‘zbek tilida huquqiy savol bering — javob indekslangan qonun moddalariga havola bilan qaytadi.</p>
+      <p class="notice">Bu yordamchi manbalarni tushuntiradi. Muhim qarordan oldin rasmiy matn va mutaxassis bilan tekshiring.
+        Lex.uz’ning rasmiy mahsuloti emas.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section aria-labelledby="corpus-h" class="corpus">
+      <h2 id="corpus-h">Qamrab olingan hujjatlar</h2>
+      <ul id="corpus-list" class="corpus-list"><li class="muted">Yuklanmoqda…</li></ul>
+    </section>
+
+    <section aria-labelledby="ask-h" class="ask">
+      <h2 id="ask-h" class="visually-hidden">Savol</h2>
+      <form id="ask-form" novalidate>
+        <label for="question">Savolingiz</label>
+        <textarea id="question" name="question" rows="3" maxlength="600" required
+                  placeholder="Masalan: Sinov muddati davomida ishdan bo‘shash mumkinmi?"></textarea>
+        <div class="form-row">
+          <span id="char-count" class="muted" aria-live="polite">0 / 600</span>
+          <button id="submit" type="submit">Yuborish</button>
+        </div>
+      </form>
+      <div class="examples" aria-label="Namuna savollar">
+        <span class="muted">Namunalar:</span>
+        <button type="button" class="example">Sinov muddati davomida ishdan bo‘shash mumkinmi?</button>
+        <button type="button" class="example">Dastlabki sinov muddati qancha bo‘lishi mumkin?</button>
+        <button type="button" class="example">Sifatsiz tovarni qaytarib, pulimni olsam bo‘ladimi?</button>
+        <button type="button" class="example">Yillik asosiy mehnat taʼtili necha kun?</button>
+      </div>
+    </section>
+
+    <section id="result" class="result" aria-live="polite" aria-busy="false"></section>
+  </main>
+
+  <footer class="wrap site-footer">
+    <p>Manba matnlari <a href="https://lex.uz" rel="noopener noreferrer" target="_blank">lex.uz</a> saytidan olingan.
+      “Tekshirilgan” — indeks manbani oxirgi marta tekshirgan vaqt, hujjatning kuchga kirgan sanasi emas.</p>
+  </footer>
+</body>
+</html>

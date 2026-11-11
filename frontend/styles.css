@@ -1,0 +1,78 @@
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --text: #1c1d1f;
+  --muted: #555a61;
+  --border: #d8dadd;
+  --accent: #0a4f8a;
+  --accent-text: #ffffff;
+  --warn-bg: #fff6e0;
+  --warn-border: #c98a00;
+  --err-bg: #fdecec;
+  --err-border: #b3261e;
+  --focus: #ffbf47;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171a; --surface: #1e2125; --text: #ececec; --muted: #a9adb3; --border: #3a3e44;
+    --accent: #6fb3f2; --accent-text: #0d1b28; --warn-bg: #3a2f12; --warn-border: #e0b04c;
+    --err-bg: #3b1d1b; --err-border: #f08a80;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+}
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+.skip { position: absolute; left: -9999px; }
+.skip:focus { left: 16px; top: 8px; background: var(--surface); padding: 6px 10px; z-index: 10; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+a { color: var(--accent); }
+.site-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 20px 0 12px; }
+h1 { margin: 0 0 4px; font-size: 1.7rem; letter-spacing: -0.01em; }
+h2 { font-size: 1.1rem; margin: 24px 0 8px; }
+.lead { margin: 0 0 8px; }
+.notice { margin: 0; font-size: 0.92rem; color: var(--muted); }
+.muted { color: var(--muted); }
+.corpus-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.corpus-list li { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px 12px; font-size: 0.95rem; }
+.corpus-list .meta { display: block; font-size: 0.85rem; color: var(--muted); }
+form { margin-top: 20px; }
+label { font-weight: 600; display: block; margin-bottom: 6px; }
+textarea { width: 100%; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px; resize: vertical; min-height: 88px; }
+.form-row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 12px; }
+button { font: inherit; cursor: pointer; border-radius: var(--radius); }
+#submit { background: var(--accent); color: var(--accent-text); border: 0; padding: 10px 22px; font-weight: 600; }
+#submit[disabled] { opacity: 0.6; cursor: progress; }
+.examples { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+.example { background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 6px 10px;
+  font-size: 0.9rem; text-align: left; }
+.result { margin: 24px 0 40px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.card + .card { margin-top: 12px; }
+.status-note { border-left: 4px solid var(--warn-border); background: var(--warn-bg); }
+.error { border-left: 4px solid var(--err-border); background: var(--err-bg); }
+.claims { margin: 0; padding-left: 1.2em; }
+.claims li + li { margin-top: 8px; }
+.cite { display: inline-block; margin-left: 4px; font-size: 0.8rem; font-weight: 600; padding: 0 6px;
+  border: 1px solid var(--accent); color: var(--accent); background: transparent; border-radius: 6px;
+  line-height: 1.5; vertical-align: 1px; }
+.limitations { margin: 12px 0 0; font-size: 0.93rem; color: var(--muted); }
+details.source { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px;
+  background: var(--surface); }
+details.source + details.source { margin-top: 8px; }
+details.source summary { cursor: pointer; font-weight: 600; }
+details.source blockquote { margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--border);
+  white-space: pre-wrap; }
+.source-meta { font-size: 0.85rem; color: var(--muted); }
+.spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+.site-footer { font-size: 0.85rem; color: var(--muted); padding-bottom: 32px; }

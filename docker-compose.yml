@@ -1,0 +1,73 @@
+# Local development / CI stack. Production overrides: deploy/docker-compose.prod.yml
+name: lexuz-rag
+
+x-app: &app
+  build: .
+  image: ${APP_IMAGE:-lexuz-rag:dev}
+  env_file: [.env]
+  environment:
+    DATABASE_URL: postgresql+psycopg://lexuz:${POSTGRES_PASSWORD:-lexuz}@postgres:5432/lexuz
+    REDIS_URL: redis://redis:6379/0
+    SNAPSHOT_DIR: /data/snapshots
+    MODEL_CACHE_DIR: /data/models
+    FRONTEND_DIR: /app/frontend
+  volumes:
+    - snapshots:/data/snapshots
+    - models:/data/models
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis: {condition: service_healthy}
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.1-pg17
+    environment:
+      POSTGRES_USER: lexuz
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lexuz}
+      POSTGRES_DB: lexuz
+    volumes: [pgdata:/var/lib/postgresql/data]
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lexuz -d lexuz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4.7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    volumes: [redisdata:/data]
+    ports: ["127.0.0.1:${REDIS_PORT:-6379}:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    <<: *app
+    command: ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000",
+              "--proxy-headers", "--forwarded-allow-ips", "${FORWARDED_ALLOW_IPS:-127.0.0.1}"]
+    ports: ["127.0.0.1:8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    <<: *app
+    command: ["celery", "-A", "app.tasks.celery_app", "worker", "-Q", "ingestion", "--concurrency", "1", "--loglevel", "INFO"]
+
+  beat:
+    <<: *app
+    command: ["celery", "-A", "app.tasks.celery_app", "beat", "--loglevel", "INFO", "--schedule", "/tmp/celerybeat-schedule"]
+
+volumes:
+  pgdata:
+  redisdata:
+  snapshots:
+  models:
