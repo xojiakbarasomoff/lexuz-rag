@@ -26,7 +26,7 @@ exact article on Lex.uz.
 | Rate limit / budget | ✅ Redis Lua, tested with real Redis incl. 20-thread race and Redis outage |
 | Frontend | ✅ single static page, Uzbek UI, text-only rendering, XSS test |
 | Tests / CI | ✅ unit + PostgreSQL/pgvector + Redis integration tests, frontend XSS, offline Gemini adapter tests (no real API in CI). ✅ GitHub Actions CI green — live status [![CI](https://github.com/xojiakbarasomoff/lexuz-rag/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xojiakbarasomoff/lexuz-rag/actions/workflows/ci.yml) · last verified run (Gemini live eval commit be3f165, 91 tests, Docker build): https://github.com/xojiakbarasomoff/lexuz-rag/actions/runs/43021674203 |
-| Eval | ✅ 50-item benchmark (AI-drafted, **not human-verified** — review sheet `evals/review/`, all `not_reviewed`). ✅ retrieval dev/holdout, ✅ live answer eval on dev (RRF k=10 baseline) and ✅ one-time holdout answer eval — all **preliminary** until human review |
+| Eval | ✅ 50-item benchmark (AI-drafted, **not human-verified** — review sheet + form in `evals/review/` with model answers, citations and verdict fields; 16 items flagged to check first; all 50 `not_reviewed`). ✅ retrieval dev/holdout, ✅ live answer eval on dev (RRF k=10 baseline) and ✅ one-time holdout answer eval — all **preliminary** until human review |
 | Deployment / CD | ⚠️ configs and scripts ready and locally validated; CD workflow runs after CI and currently skips with a notice (no `DEPLOY_HOST`). **Not deployed** — no VPS, domain or secrets |
 | Live URL | none yet |
 | Demo video | not recorded |

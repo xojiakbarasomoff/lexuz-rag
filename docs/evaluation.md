@@ -264,8 +264,11 @@ Failing or imperfect items (none hidden):
 
 ## Future work (from dev + holdout; holdout NOT used for tuning)
 
-The holdout set is now spent for tuning purposes: any further tuning needs
-**new development questions** (and ideally a fresh holdout).
+The holdout set was used **once, for a final assessment** of the frozen
+baseline; no code, prompt or retrieval change was made after seeing its
+results. Its results are now known, so using it again to choose between
+configurations would turn it into tuning data. Further tuning therefore
+needs **new development questions** (and ideally a fresh holdout).
 
 1. Human review of all 50 benchmark items (`evals/review/`), then re-label
    results; until then every number above is preliminary.
@@ -286,10 +289,23 @@ The holdout set is now spent for tuning purposes: any further tuning needs
 
 ## Human review
 
-`python -m evals.build_review_sheet` writes `evals/review/review_sheet.md`
-(question, reference answer, article and original text side by side, from the
-active corpus) and `evals/review/review_form.csv` (one row per item,
-`review_status = not_reviewed`). **No item has been reviewed by a human.**
+`python -m evals.build_review_sheet` writes (no API calls):
+
+- `evals/review/review_sheet.md` — one card per item: question and expected
+  status, reference answer, document/article, original source text with the
+  Lex.uz link, the frozen-baseline model answer with its citations and any
+  backend validation errors, and verdict boxes (to‘g‘ri / qisman / noto‘g‘ri /
+  noaniq) for question+status, reference answer, source article and model
+  answer. **16 items are flagged to review first** (automatic signals: status
+  mismatch, provider error, citations outside the expected articles, missed
+  expected article, repair/fallback, status changed between dev runs).
+- `evals/review/review_form.csv` — one row per item with the four verdict
+  columns, corrected reference answer, missing/wrong articles, comment,
+  reviewer and date. UTF-8 with BOM (opens in Excel). The generator refuses to
+  overwrite a form that already contains reviewer input.
+
+**All 50 items are `not_reviewed`. No item has been reviewed by a human;** the
+priority flags are automatic and are not a review. See `evals/review/README.md`.
 
 ## Error analysis notes (dev)
 
