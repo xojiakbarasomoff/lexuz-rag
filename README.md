@@ -18,9 +18,9 @@ exact article on Lex.uz.
 | Answer generation | ✅ implemented (default `claude-haiku-5-5`, ID and price verified on the official docs; structured JSON, citation/quote validation, repair, fallback) and tested with a fake LLM. ⚠️ **Not yet run against the real API** — no API key yet ([setup](docs/llm-setup.md)). **Answer quality is unmeasured, so the project is not ready.** |
 | Rate limit / budget | ✅ Redis Lua, tested with real Redis incl. 20-thread race and Redis outage |
 | Frontend | ✅ single static page, Uzbek UI, text-only rendering, XSS test |
-| Tests / CI | ✅ 74 tests (unit + PostgreSQL/pgvector + Redis integration) pass locally; CI workflow written — ⚠️ not yet run on GitHub (repo not pushed) |
+| Tests / CI | ✅ 77 tests (unit + PostgreSQL/pgvector + Redis integration, frontend XSS). ✅ GitHub Actions CI green on 2026-11-11 (ruff, migrations up/check/down/up, tests, Docker build): https://github.com/xojiakbarasomoff/lexuz-rag/actions/runs/42970636910 |
 | Eval | ✅ 50-item benchmark (AI-drafted, **not human-verified**; review sheet in `evals/review/`, status `not_reviewed`); retrieval results below. ⚠️ answer-level eval not run (needs API key); it is capped at $1 incl. repairs and retries |
-| Deployment / CD | ⚠️ configs and scripts ready and locally validated; **not deployed** — no VPS, domain or secrets |
+| Deployment / CD | ⚠️ configs and scripts ready and locally validated; CD workflow runs after CI and currently skips with a notice (no `DEPLOY_HOST`). **Not deployed** — no VPS, domain or secrets |
 | Live URL | none yet |
 | Demo video | not recorded |
 
