@@ -40,7 +40,7 @@ CI never runs `answers`. Holdout is run only after a tuning round is finished.
 | Layer | Metric |
 |---|---|
 | Retrieval | Article Recall@k, MRR, latency p50/p95 (embedding + SQL) |
-| Generation (live) | status accuracy; refusal/clarification accuracy; citation precision/recall vs expected articles; claim citation coverage; first-try validity, repair and fallback rates; tokens; estimated cost; latency p50/p95 |
+| Generation (live) | status accuracy (returned status = expected status; not answer or legal accuracy); refusal/clarification accuracy; citation precision/recall vs expected articles; claim citation coverage; first-try validity, repair and fallback rates; tokens; estimated cost; latency p50/p95 |
 | Faithfulness (manual) | per-claim 0/1/2 score, completeness, over-reach — `evals/RUBRIC.md` |
 
 Finding the right article (retrieval) and saying something legally correct

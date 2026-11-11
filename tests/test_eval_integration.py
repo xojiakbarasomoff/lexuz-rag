@@ -97,3 +97,30 @@ def test_quota_stop_writes_checkpoint_and_resume_continues(eval_env, monkeypatch
     }
     assert run.main([*args, "--resume"]) == 0
     assert len(ckpt.read_text(encoding="utf-8").splitlines()) == 30
+
+
+def test_retry_errors_keeps_original_failed_attempts(eval_env):
+    run, llm, out = eval_env
+    from app.providers.llm import LLMError
+
+    seen = {"n": 0}
+
+    def flaky(system, user):
+        seen["n"] += 1
+        if seen["n"] <= 2:
+            raise LLMError("provider_unavailable", "503")
+        return {"status": "insufficient_evidence", "claims": [], "clarifying_question": "", "limitations": []}
+
+    llm.script = flaky
+    args = ["answers", "--split", "dev", "--max-cost-usd", "1.0", "--sleep-s", "0"]
+    assert run.main(args) == 0
+    assert run.main([*args, "--resume", "--retry-errors"]) == 0
+    ckpt = out / "checkpoints" / "answers_dev.jsonl"
+    attempts = out / "checkpoints" / "answers_dev.attempts.jsonl"
+    rows = [json.loads(x) for x in ckpt.read_text(encoding="utf-8").splitlines()]
+    tries = [json.loads(x) for x in attempts.read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 30 and not any(r["error"] for r in rows)
+    assert len(tries) == 32 and sum(1 for t in tries if t["error"] == "provider_unavailable") == 2
+    report = json.loads(sorted(out.glob("*_answers_dev.json"))[-1].read_text(encoding="utf-8"))
+    assert report["summary"]["transient_provider_errors"] == 2 and report["summary"]["attempts_total"] == 32
+    assert report["result_status"].startswith("PRELIMINARY") and report["prompt"]["version"] == "answer-v1"

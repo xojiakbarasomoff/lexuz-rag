@@ -70,6 +70,7 @@ class AnswerTrace:
     repaired: bool = False
     fallback: bool = False
     provider_blocked: str | None = None  # provider safety block reason (not missing evidence)
+    model_versions: set = field(default_factory=set)  # model versions reported by the provider
     validation_errors: list[str] = field(default_factory=list)
 
 
@@ -155,6 +156,7 @@ def _guarded_call(deps: Deps, trace: AnswerTrace, user: str, request_id: str) ->
             )
             raise
         actual = estimate_cost_usd(s, res.input_tokens, res.output_tokens)
+        trace.model_versions.add(res.model)
         if g:
             g.settle(call_id, actual, scope=deps.budget_scope)
         trace.input_tokens += res.input_tokens

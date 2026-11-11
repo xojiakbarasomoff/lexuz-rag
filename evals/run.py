@@ -88,6 +88,15 @@ def write_report(kind: str, split: str, payload: dict, md_lines: list[str]) -> P
     return base.with_suffix(".md")
 
 
+def _prompt_fingerprint() -> dict:
+    import hashlib
+
+    from app.generation.prompt import OUTPUT_SCHEMA, PROMPT_VERSION, SYSTEM_PROMPT
+
+    blob = SYSTEM_PROMPT + json.dumps(OUTPUT_SCHEMA, sort_keys=True)
+    return {"version": PROMPT_VERSION, "sha256": hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]}
+
+
 def header(kind: str, split: str, session, n: int, extra: dict) -> tuple[dict, list[str]]:
     s = get_settings()
     meta = {
@@ -102,9 +111,18 @@ def header(kind: str, split: str, session, n: int, extra: dict) -> tuple[dict, l
             "top_k": s.retrieval_top_k,
             "candidates": s.retrieval_candidate_limit,
             "rrf_k": s.retrieval_rrf_k,
+            "weights_semantic_lexical_articleref": [
+                s.retrieval_semantic_weight,
+                s.retrieval_lexical_weight,
+                s.retrieval_article_ref_weight,
+            ],
+            "title_list": s.retrieval_title_list,
+            "reranker": s.retrieval_reranker or "off",
             "context_max_tokens": s.context_max_tokens,
         },
+        "prompt": _prompt_fingerprint(),
         "benchmark_verification": "ai_drafted_unverified (no human review recorded yet)",
+        "result_status": "PRELIMINARY - benchmark questions/references are not human-reviewed",
         **extra,
     }
     md = [
@@ -115,7 +133,9 @@ def header(kind: str, split: str, session, n: int, extra: dict) -> tuple[dict, l
         f"- Items: {n}",
         f"- Embedding space: `{meta['embedding_space']}`",
         f"- Retrieval config: {meta['retrieval']}",
+        f"- Prompt: `{meta['prompt']['version']}` sha256 `{meta['prompt']['sha256']}`",
         f"- Benchmark manual verification: {meta['benchmark_verification']}",
+        f"- **Result status: {meta['result_status']}**",
         "- Corpus:",
     ]
     md += [
@@ -290,6 +310,8 @@ def cmd_answers(args) -> int:
             return 2
         previous = [json.loads(x) for x in ckpt.read_text(encoding="utf-8").splitlines() if x.strip()]
     ckpt.parent.mkdir(parents=True, exist_ok=True)
+    # Append-only log of ALL attempts; --retry-errors never deletes from it.
+    attempts_path = ckpt.with_name(ckpt.stem + ".attempts.jsonl")
     spent_before = sum(r.get("est_cost_usd", 0.0) for r in previous)  # incl. rows dropped for retry
     if args.retry_errors:
         transient = {"provider_unavailable", "provider_timeout"}
@@ -405,6 +427,7 @@ def cmd_answers(args) -> int:
                 "est_cost_usd": round(trace.est_cost_usd, 5),
                 "latency_ms": round(latency),
                 "llm_calls": trace.llm_calls,
+                "model_versions": sorted(trace.model_versions),
                 "validation_errors": trace.validation_errors,
                 "answer": [c.text for c in claims],
                 "sources": [
@@ -415,11 +438,50 @@ def cmd_answers(args) -> int:
                 "limitations": resp.limitations if resp else [],
             }
         )
-        with open(ckpt, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(rows[-1], ensure_ascii=False, default=str) + "\n")
+        rows[-1]["attempt_at"] = datetime.now(UTC).isoformat()
+        for target in (ckpt, attempts_path):
+            with open(target, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(rows[-1], ensure_ascii=False, default=str) + "\n")
         print(f"{it['id']}: {status} (expected {it['expected_status']}) {round(latency)} ms")
     summary = _answer_summary(rows)
     summary["not_run_due_to_cap"] = len(not_run)
+    attempts = (
+        [json.loads(x) for x in attempts_path.read_text(encoding="utf-8").splitlines() if x.strip()]
+        if attempts_path.exists()
+        else []
+    )
+    transient = [a for a in attempts if a.get("error") in ("provider_unavailable", "provider_timeout")]
+    summary["attempts_total"] = len(attempts)
+    summary["transient_provider_errors"] = len(transient)
+    summary["all_attempts_llm_calls"] = sum(a.get("llm_calls", 0) for a in attempts)
+    summary["all_attempts_tokens_in_out"] = [
+        sum(a.get("input_tokens", 0) for a in attempts),
+        sum(a.get("output_tokens", 0) for a in attempts),
+    ]
+    summary["all_attempts_est_cost_usd"] = round(sum(a.get("est_cost_usd", 0.0) for a in attempts), 4)
+    summary["model_versions_seen"] = sorted({m for r in rows for m in r.get("model_versions", [])})
+    cats: dict[str, int] = {}
+    for r in rows:
+        for e in r.get("validation_errors", []):
+            key = (
+                "quote not found verbatim"
+                if "not found verbatim" in e
+                else "quote too long"
+                if "longer than" in e
+                else "no verifiable quote"
+                if "no verifiable quote" in e
+                else "unknown source id"
+                if "unknown source" in e
+                else "no source ids"
+                if "no source ids" in e
+                else "invalid JSON"
+                if "JSON" in e
+                else "url"
+                if "URL" in e
+                else "other"
+            )
+            cats[key] = cats.get(key, 0) + 1
+    summary["validation_error_counts"] = cats
     summary["budget_state"] = guards.budget_state(run_scope)
     md += ["", "## Results", "", "| metric | value |", "|---|---|"] + [f"| {k} | {v} |" for k, v in summary.items()]
     md += [
@@ -482,6 +544,10 @@ def cmd_answers(args) -> int:
             md += show(r)
         if not sel:
             md.append("- none")
+    md += ["", "## Transient provider errors (all attempts, kept even when retried)", ""]
+    md += [
+        f"- {a['id']} at {a.get('attempt_at', '?')}: {a['error']} ({a.get('latency_ms')} ms)" for a in transient
+    ] or ["- none"]
     md += ["", "## Not run (cost cap)", "", ", ".join(not_run) or "- none"]
     path = write_report("answers", args.split, {**meta, "summary": summary, "rows": rows, "not_run": not_run}, md)
     print("\n".join(md))

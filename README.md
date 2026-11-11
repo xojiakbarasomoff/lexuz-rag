@@ -142,7 +142,11 @@ After the retrieval fix (RRF k 60 → 10, D22), same 30 dev questions:
 |---|---|---|---|---|---|---|---|
 | 0.933 (28/30) | 1.0 (4/4) | 0.906 | 0.846 | 1.0 | 0 | 8.2 s / 18.5 s | 140,242 / 15,450 |
 
-Before the fix: status 0.867, precision 0.932, recall 0.788, p50 3.8 s.
+**Status accuracy** = the returned status (`answered` / `insufficient_evidence` /
+`clarification_needed`) matched the expected one. It is **not** answer
+accuracy and not legal correctness. Compared with the k=60 run, citation
+precision went **down** (0.932 → 0.906) and latency went **up** (p50 3.8 s → 8.2 s).
+Before the fix: status accuracy 0.867, precision 0.932, recall 0.788, p50 3.8 s.
 4 items first failed with transient Gemini 5xx and were re-run once. $0
 charged (free tier). Remaining failures and regressions are listed in
 [docs/evaluation.md](docs/evaluation.md). Citation validity is not legal
