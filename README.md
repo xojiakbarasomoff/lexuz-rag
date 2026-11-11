@@ -22,21 +22,23 @@ exact article on Lex.uz.
 | Corpus | ✅ Labor Code (593 articles) and Consumer Protection Law (33 articles), Uzbek Latin. Consumer law: live fetch. Labor Code: local import of the official page (live fetch hit a DNS failure), later **confirmed identical by a live fetch**. |
 | Ingestion | ✅ fetch → snapshot → parse → publish gate → chunk → embed → atomic activation; idempotent; CLI + Celery |
 | Retrieval | ✅ hybrid (pgvector + PostgreSQL FTS + article-number match, weighted RRF); evaluated on real data |
-| Answer generation | ✅ implemented with the **Google Gemini API, free tier only** (`gemini-3.8-flash`, verified on Google's docs; `google-genai` SDK; structured JSON, no tools; citation/quote validation, repair, fallback; quota/safety/timeout handling) and tested offline with SDK types + a fake LLM. ⚠️ **Not yet run against the real API** — no `GEMINI_API_KEY` yet ([setup](docs/llm-setup.md)). **Answer quality is unmeasured, so the project is not ready.** |
+| Answer generation | ✅ **verified with the real Gemini API (free tier)** on 2026-11-11: model `gemini-3.5-flash-lite` (`gemini-3.8-flash` was visible to the key but timed out, D20); `google-genai` SDK, structured JSON, no tools; citation/quote validation, repair, fallback; quota/safety/timeout handling; provider safety blocks reported as `provider_blocked`. ⚠️ Answer faithfulness not yet human-reviewed. |
 | Rate limit / budget | ✅ Redis Lua, tested with real Redis incl. 20-thread race and Redis outage |
 | Frontend | ✅ single static page, Uzbek UI, text-only rendering, XSS test |
-| Tests / CI | ✅ 77 tests (unit + PostgreSQL/pgvector + Redis integration, frontend XSS). ✅ GitHub Actions CI green on 2026-11-11 (ruff, migrations up/check/down/up, tests, Docker build): https://github.com/xojiakbarasomoff/lexuz-rag/actions/runs/42970636910 |
-| Eval | ✅ 50-item benchmark (AI-drafted, **not human-verified**; review sheet in `evals/review/`, status `not_reviewed`); retrieval results below. ⚠️ answer-level eval not run (needs a key); it is paced, checkpointed/resumable and capped at $1 paid-equivalent incl. repairs and retries |
+| Tests / CI | ✅ unit + PostgreSQL/pgvector + Redis integration tests, frontend XSS, offline Gemini adapter tests (no real API in CI). ✅ GitHub Actions CI green — live status [![CI](https://github.com/xojiakbarasomoff/lexuz-rag/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xojiakbarasomoff/lexuz-rag/actions/workflows/ci.yml) · last verified run (Gemini switch, 91 tests): https://github.com/xojiakbarasomoff/lexuz-rag/actions/runs/42990872065 |
+| Eval | ✅ 50-item benchmark (AI-drafted, **not human-verified**; review sheet `evals/review/`, status `not_reviewed`). ✅ retrieval dev/holdout and ✅ live answer eval on **dev** (results below). Holdout answers not run. |
 | Deployment / CD | ⚠️ configs and scripts ready and locally validated; CD workflow runs after CI and currently skips with a notice (no `DEPLOY_HOST`). **Not deployed** — no VPS, domain or secrets |
 | Live URL | none yet |
 | Demo video | not recorded |
 
 ## Screenshot
 
-Real local UI (dark mode) with both documents indexed. No LLM key was
-configured, so the answer area shows the “AI xizmati sozlanmagan” error.
+Real local UI (dark mode), 2026-11-11: the question “Dastlabki sinov muddati
+qancha bo‘lishi mumkin?” answered by `gemini-3.5-flash-lite` (free tier); every
+claim cites S1 = Labor Code art. 130, the source card shows the stored original
+text and the Lex.uz link. The privacy notice is above the submit button.
 
-![Local UI without an LLM key](docs/img/ui-local-no-llm-key.jpg)
+![Local UI with a real Gemini answer](docs/img/ui-gemini-answer.jpg)
 
 ## Architecture
 
@@ -130,7 +132,20 @@ Errors: `{"request_id", "error": {"code", "message"}}` with codes such as
 | dev (tuned on) | 26 of 30 | 0.635 | 0.827 | 0.827 | 0.749 |
 | holdout (run once) | 17 of 20 | 0.706 | 0.882 | 1.000 | 0.801 |
 
-Ambiguous and out-of-corpus items have no expected article and are excluded from Recall/MRR (they are scored by the answer eval). Small samples — one item ≈ 4–6 points. Answer quality, citation
+Ambiguous and out-of-corpus items have no expected article and are excluded from Recall/MRR (they are scored by the answer eval). Small samples — one item ≈ 4–6 points.
+
+### Answer eval — dev, real Gemini API (`gemini-3.5-flash-lite`, free tier, 2026-11-11)
+
+| Status accuracy | Abstain/clarify accuracy | Citation precision | Citation recall | Claim coverage | Provider blocks | p50 / p95 latency | Tokens in / out |
+|---|---|---|---|---|---|---|---|
+| 0.867 (26/30) | 1.0 (4/4) | 0.932 | 0.788 | 1.0 | 0 | 3.8 s / 14.4 s | 145,630 / 14,712 |
+
+33 calls incl. 3 repairs; 1 safe fallback; $0 charged (free tier),
+paid-equivalent estimate $0.08. Main failure: three questions whose article
+was not retrieved got an honest “not in the sources” instead of an answer.
+Details and failure examples: [docs/evaluation.md](docs/evaluation.md).
+Semantic faithfulness has **not** been reviewed by a human yet, and holdout
+answers were not run — the project is not “done”. Answer quality, citation
 precision/recall, refusal accuracy, latency and cost of the full pipeline have
 **not** been measured yet (needs an API key): run
 `uv run python -m app.cli eval answers --split dev --max-cost-usd 1`.

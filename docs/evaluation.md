@@ -91,6 +91,59 @@ Reading these numbers honestly:
   no answer-quality, cost or end-to-end latency numbers exist yet
   (setup: docs/llm-setup.md). The project is not "ready" until it is.
 
+## Answer eval — dev, real Gemini API (2026-11-11)
+
+Report: `evals/results/20261111T123230Z_answers_dev.{md,json}`; per-item
+checkpoint: `evals/results/checkpoints/answers_dev.jsonl`.
+
+- Model: **`gemini-3.5-flash-lite`** (free tier, thinking `minimal`,
+  max 2048 output tokens). `gemini-3.8-flash` was tried first and timed out
+  (decision D20). Retrieval config unchanged. Holdout not touched.
+- Pacing 13 s between items, project caps 5 calls/min, checkpoint per item.
+  No quota error, no provider safety block, no cap stop: 30/30 items ran.
+- 33 LLM calls (30 + 3 repairs). Tokens: 145,630 input / 14,712 output
+  (incl. thinking). Free tier → $0 charged; paid-equivalent estimate
+  $0.0805 (of the $1 cap).
+- End-to-end latency per item (retrieval + LLM + repair, dev laptop):
+  p50 3.8 s, p95 14.4 s, max 17.7 s (first item includes loading the
+  embedding model).
+
+| Metric | Value |
+|---|---|
+| Status accuracy (all 30) | 0.867 (26/30) |
+| — items expected `answered` | 0.846 (22/26) |
+| — abstain / clarify items | 1.000 (4/4: 2 clarification, 2 out-of-corpus) |
+| Provider safety blocks (`provider_blocked`) | 0 — counted separately from `insufficient_evidence` |
+| Citation precision vs expected articles | 0.932 |
+| Citation recall vs expected articles (answered) | 0.788 |
+| Claim citation coverage | 1.000 (every shown claim has a validated source id + quote) |
+| First-try valid output | 0.900 (3 needed a repair) |
+| Safe fallback after failed repair | 1 (dev-14) |
+
+Failure examples (all from the report):
+
+- **dev-03, dev-04, dev-08 → `insufficient_evidence` instead of an answer.**
+  These are exactly the retrieval misses (217, 182, 160 ranked 9–12, outside
+  the 6-article context). The model said the sources do not state the rule
+  rather than inventing it — correct abstention, but the user gets no
+  answer. Fix belongs in retrieval, not generation.
+- **dev-14 (apostrophe-less question) → safe fallback.** Retrieval found 173,
+  but the model's quotes did not match the stored text verbatim twice (first
+  try and repair), so the backend refused to show the answer.
+- **dev-09, dev-23: first output had a quote > 400 chars**; the repair call
+  fixed it. dev-09 still missed the second article (173): the model said the
+  sources do not cover severance pay although 173 was not in the context.
+- **dev-25: extra citation** of Labor Code art. 565 (moral harm to employees)
+  for a consumer-law question — valid quote, but outside the expected scope.
+- **dev-19 (injection): the system prompt was not revealed**, but the answer
+  is built on articles 129 and 132; the asked-for duration (130) was not in
+  the context, so the claims are related but do not answer “how long”.
+- First live answer (CLI): claim text dropped “kamida” (“at least”) from
+  “kamida uch kun oldin”; the citation is valid. Validation cannot catch such
+  meaning shifts — that is what the manual rubric is for.
+
+Not measured: semantic faithfulness (manual review pending), holdout answers.
+
 ## Human review
 
 `python -m evals.build_review_sheet` writes `evals/review/review_sheet.md`
