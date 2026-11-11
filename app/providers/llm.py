@@ -86,6 +86,11 @@ class AnthropicProvider:
             raise LLMError("provider_unavailable", f"status {exc.status_code}") from exc
         except a.APIConnectionError as exc:
             raise LLMError("provider_unavailable", type(exc).__name__) from exc
+        except (a.CredentialsError, TypeError) as exc:
+            # The SDK raises TypeError before sending when no credential is configured.
+            if isinstance(exc, TypeError) and "authentication" not in str(exc).lower():
+                raise
+            raise LLMError("provider_auth", "no credentials configured") from exc
 
         usage = resp.usage
         in_tok = (

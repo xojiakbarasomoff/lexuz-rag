@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     retrieval_candidate_limit: int = 40
     retrieval_top_k: int = 6
     retrieval_rrf_k: int = 60
+    # Weighted RRF (tuned on the dev split only, see docs/evaluation.md)
+    retrieval_semantic_weight: float = 1.0
+    retrieval_lexical_weight: float = 0.25
+    retrieval_article_ref_weight: float = 2.0
+    retrieval_title_list: bool = False  # extra RRF list on article titles; off: made dev recall worse (decisions.md)
     context_max_tokens: int = 6000
     max_question_chars: int = 600
 

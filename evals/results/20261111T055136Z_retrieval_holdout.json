@@ -1,0 +1,392 @@
+{
+  "kind": "retrieval",
+  "date": "2026-11-11T05:51:26.769357+00:00",
+  "git_commit": "7df3c26-dirty",
+  "split": "holdout",
+  "items": 17,
+  "corpus": {
+    "istemolchilar-huquqlari": {
+      "version_id": "4c6b58db-3281-4519-9b36-e7feed812188",
+      "content_checksum": "7c759eec74a0",
+      "source_kind": "live_fetch",
+      "revision_label": "02.02.2026",
+      "fetched_at": "2026-11-11T05:01:53.614969+00:00"
+    },
+    "mehnat-kodeksi": {
+      "version_id": "35f1b629-66e6-4b48-8197-a0f703518a8d",
+      "content_checksum": "af3d92c6ade6",
+      "source_kind": "local_import",
+      "revision_label": "15.10.2026 01",
+      "fetched_at": "2026-11-11T04:42:00+00:00"
+    }
+  },
+  "embedding_space": "fastembed:intfloat/multilingual-e5-large:1024",
+  "retrieval": {
+    "top_k": 6,
+    "candidates": 40,
+    "rrf_k": 60,
+    "context_max_tokens": 6000
+  },
+  "benchmark_verification": "ai_drafted_unverified (no human review recorded yet)",
+  "summary": {
+    "recall@1": 0.706,
+    "recall@3": 0.882,
+    "recall@5": 1.0,
+    "recall@6": 1.0,
+    "mrr": 0.801,
+    "latency_ms_p50": 221.9,
+    "latency_ms_p95": 384.8,
+    "samples": 17
+  },
+  "per_type": {
+    "fact": {
+      "n": 7,
+      "recall@6": 1.0
+    },
+    "paraphrase": {
+      "n": 2,
+      "recall@6": 1.0
+    },
+    "script_variant": {
+      "n": 3,
+      "recall@6": 1.0
+    },
+    "multi_article": {
+      "n": 2,
+      "recall@6": 1.0
+    },
+    "false_premise": {
+      "n": 2,
+      "recall@6": 1.0
+    },
+    "prompt_injection": {
+      "n": 1,
+      "recall@6": 1.0
+    }
+  },
+  "rows": [
+    {
+      "id": "hold-01",
+      "type": "fact",
+      "first_relevant_rank": 1,
+      "recall": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "mehnat-kodeksi:207",
+        "mehnat-kodeksi:263",
+        "mehnat-kodeksi:201",
+        "mehnat-kodeksi:478",
+        "mehnat-kodeksi:191"
+      ]
+    },
+    {
+      "id": "hold-02",
+      "type": "paraphrase",
+      "first_relevant_rank": 1,
+      "recall": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "mehnat-kodeksi:132",
+        "mehnat-kodeksi:308",
+        "mehnat-kodeksi:306",
+        "mehnat-kodeksi:129",
+        "mehnat-kodeksi:303"
+      ]
+    },
+    {
+      "id": "hold-03",
+      "type": "fact",
+      "first_relevant_rank": 1,
+      "recall": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "mehnat-kodeksi:129",
+        "mehnat-kodeksi:132",
+        "mehnat-kodeksi:130",
+        "mehnat-kodeksi:104",
+        "mehnat-kodeksi:496"
+      ]
+    },
+    {
+      "id": "hold-04",
+      "type": "fact",
+      "first_relevant_rank": 1,
+      "recall": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "mehnat-kodeksi:314",
+        "mehnat-kodeksi:315",
+        "mehnat-kodeksi:313",
+        "mehnat-kodeksi:312",
+        "mehnat-kodeksi:310"
+      ]
+    },
+    {
+      "id": "hold-05",
+      "type": "fact",
+      "first_relevant_rank": 2,
+      "recall": {
+        "1": 0.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "mehnat-kodeksi:258",
+        "mehnat-kodeksi:186",
+        "mehnat-kodeksi:262",
+        "mehnat-kodeksi:253",
+        "mehnat-kodeksi:189"
+      ]
+    },
+    {
+      "id": "hold-06",
+      "type": "script_variant",
+      "first_relevant_rank": 1,
+      "recall": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "mehnat-kodeksi:217",
+        "mehnat-kodeksi:227",
+        "mehnat-kodeksi:429",
+        "mehnat-kodeksi:225",
+        "mehnat-kodeksi:230"
+      ]
+    },
+    {
+      "id": "hold-07",
+      "type": "script_variant",
+      "first_relevant_rank": 1,
+      "recall": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "mehnat-kodeksi:106",
+        "mehnat-kodeksi:149",
+        "mehnat-kodeksi:125",
+        "mehnat-kodeksi:157",
+        "mehnat-kodeksi:104"
+      ]
+    },
+    {
+      "id": "hold-08",
+      "type": "multi_article",
+      "first_relevant_rank": 4,
+      "recall": {
+        "1": 0.0,
+        "3": 0.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "mehnat-kodeksi:204",
+        "mehnat-kodeksi:201",
+        "mehnat-kodeksi:195",
+        "mehnat-kodeksi:262",
+        "mehnat-kodeksi:206"
+      ]
+    },
+    {
+      "id": "hold-09",
+      "type": "false_premise",
+      "first_relevant_rank": 5,
+      "recall": {
+        "1": 0.0,
+        "3": 0.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "mehnat-kodeksi:221",
+        "mehnat-kodeksi:418",
+        "mehnat-kodeksi:207",
+        "mehnat-kodeksi:231",
+        "mehnat-kodeksi:217"
+      ]
+    },
+    {
+      "id": "hold-10",
+      "type": "false_premise",
+      "first_relevant_rank": 1,
+      "recall": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "mehnat-kodeksi:392",
+        "mehnat-kodeksi:408",
+        "mehnat-kodeksi:119",
+        "mehnat-kodeksi:394",
+        "mehnat-kodeksi:396"
+      ]
+    },
+    {
+      "id": "hold-11",
+      "type": "fact",
+      "first_relevant_rank": 1,
+      "recall": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "mehnat-kodeksi:452",
+        "mehnat-kodeksi:455",
+        "mehnat-kodeksi:456",
+        "mehnat-kodeksi:453",
+        "mehnat-kodeksi:459"
+      ]
+    },
+    {
+      "id": "hold-14",
+      "type": "prompt_injection",
+      "first_relevant_rank": 3,
+      "recall": {
+        "1": 0.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "mehnat-kodeksi:308",
+        "mehnat-kodeksi:217",
+        "mehnat-kodeksi:130",
+        "mehnat-kodeksi:280",
+        "mehnat-kodeksi:554"
+      ]
+    },
+    {
+      "id": "hold-15",
+      "type": "fact",
+      "first_relevant_rank": 1,
+      "recall": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "istemolchilar-huquqlari:7",
+        "istemolchilar-huquqlari:20",
+        "istemolchilar-huquqlari:27",
+        "mehnat-kodeksi:345",
+        "istemolchilar-huquqlari:21"
+      ]
+    },
+    {
+      "id": "hold-16",
+      "type": "paraphrase",
+      "first_relevant_rank": 3,
+      "recall": {
+        "1": 0.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": true,
+      "top5_labels": [
+        "istemolchilar-huquqlari:15",
+        "istemolchilar-huquqlari:19",
+        "istemolchilar-huquqlari:13",
+        "mehnat-kodeksi:132",
+        "mehnat-kodeksi:172"
+      ]
+    },
+    {
+      "id": "hold-17",
+      "type": "fact",
+      "first_relevant_rank": 1,
+      "recall": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "istemolchilar-huquqlari:11",
+        "istemolchilar-huquqlari:12¹",
+        "istemolchilar-huquqlari:13",
+        "istemolchilar-huquqlari:18",
+        "istemolchilar-huquqlari:14"
+      ]
+    },
+    {
+      "id": "hold-18",
+      "type": "script_variant",
+      "first_relevant_rank": 1,
+      "recall": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "istemolchilar-huquqlari:4",
+        "istemolchilar-huquqlari:23",
+        "istemolchilar-huquqlari:1",
+        "istemolchilar-huquqlari:21",
+        "istemolchilar-huquqlari:8"
+      ]
+    },
+    {
+      "id": "hold-20",
+      "type": "multi_article",
+      "first_relevant_rank": 1,
+      "recall": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "acceptable_in_top5": false,
+      "top5_labels": [
+        "istemolchilar-huquqlari:14",
+        "istemolchilar-huquqlari:17",
+        "istemolchilar-huquqlari:15",
+        "istemolchilar-huquqlari:13",
+        "istemolchilar-huquqlari:28¹"
+      ]
+    }
+  ]
+}

@@ -95,3 +95,13 @@ def test_rrf_fusion_dedupes_by_article():
     assert set(scores) == {a1, a2, a3}  # one entry per article
     assert max(scores, key=scores.get) == a2  # ranked 2nd and 1st -> best fused
     assert {x.chunk_id for x in chunks[a1]} == {c["a"], c["c"]}
+
+
+def test_weighted_rrf_lets_semantic_dominate_noisy_lexical():
+    a_sem, a_lex = uuid.uuid4(), uuid.uuid4()
+    sem = [Candidate(uuid.uuid4(), a_sem, 0)]
+    lex = [Candidate(uuid.uuid4(), a_lex, 0)]
+    equal, _ = rrf_fuse([sem, lex], k=60)
+    assert equal[a_sem] == equal[a_lex]
+    weighted, _ = rrf_fuse([sem, lex], k=60, weights=[1.0, 0.25])
+    assert weighted[a_sem] > weighted[a_lex]

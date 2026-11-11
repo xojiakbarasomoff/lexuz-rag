@@ -1,0 +1,125 @@
+# Production stack for a single Ubuntu VPS. Standalone file (not an override),
+# so PostgreSQL/Redis are never published on host ports.
+#   cd /opt/lexuz && docker compose -f docker-compose.prod.yml --env-file .env up -d
+name: lexuz
+
+x-logging: &logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "5"}
+
+x-app: &app
+  image: ${APP_IMAGE:?set APP_IMAGE=ghcr.io/<owner>/lexuz-rag:<git-sha>}
+  env_file: [.env]
+  environment:
+    APP_ENV: production
+    DATABASE_URL: postgresql+psycopg://lexuz:${POSTGRES_PASSWORD:?}@postgres:5432/lexuz
+    REDIS_URL: redis://redis:6379/0
+    SNAPSHOT_DIR: /data/snapshots
+    MODEL_CACHE_DIR: /data/models
+    FRONTEND_DIR: /app/frontend
+  volumes:
+    - snapshots:/data/snapshots
+    - models:/data/models
+  networks: [internal]
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis: {condition: service_healthy}
+  restart: unless-stopped
+  logging: *logging
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.1-pg17
+    environment:
+      POSTGRES_USER: lexuz
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: lexuz
+    volumes: [pgdata:/var/lib/postgresql/data, ./backups:/backups]
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lexuz -d lexuz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 768m
+    cpus: 1.0
+    restart: unless-stopped
+    logging: *logging
+
+  redis:
+    image: redis:7.4.7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    volumes: [redisdata:/data]
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    mem_limit: 192m
+    cpus: 0.5
+    restart: unless-stopped
+    logging: *logging
+
+  api:
+    <<: *app
+    # Trust X-Forwarded-For only from the nginx container's fixed address.
+    command: ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2",
+              "--proxy-headers", "--forwarded-allow-ips", "172.28.0.10"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    mem_limit: 2g
+    cpus: 1.5
+
+  worker:
+    <<: *app
+    command: ["celery", "-A", "app.tasks.celery_app", "worker", "-Q", "ingestion", "--concurrency", "1",
+              "--loglevel", "INFO", "--max-tasks-per-child", "1"]
+    mem_limit: 2500m
+    cpus: 1.0
+
+  beat:
+    <<: *app
+    command: ["celery", "-A", "app.tasks.celery_app", "beat", "--loglevel", "INFO",
+              "--schedule", "/tmp/celerybeat-schedule"]
+    mem_limit: 256m
+    cpus: 0.25
+
+  nginx:
+    image: nginx:1.27.5-alpine
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN}
+    networks:
+      internal:
+        ipv4_address: 172.28.0.10
+    depends_on: [api]
+    restart: unless-stopped
+    mem_limit: 128m
+    logging: *logging
+
+  certbot:
+    image: certbot/certbot:v4.0.0
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    profiles: [tools]
+
+networks:
+  internal:
+    ipam:
+      config: [{subnet: 172.28.0.0/24}]
+
+volumes:
+  pgdata:
+  redisdata:
+  snapshots:
+  models:

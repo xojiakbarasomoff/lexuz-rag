@@ -115,37 +115,69 @@ def semantic_search(s: Session, qvec: list[float], space: str, doc_ids, limit: i
     return [Candidate(r[0], r[1], r[2]) for r in rows]
 
 
-def lexical_search(s: Session, question: str, doc_ids, limit: int) -> list[Candidate]:
-    out: list[Candidate] = []
+def article_ref_search(s: Session, question: str, doc_ids, limit: int) -> list[Candidate]:
+    """Chunks of articles whose number is written in the question ("130-modda")."""
     refs = article_refs(question)
-    if refs:
-        sql = text(
-            "SELECT c.id, c.article_id, c.ordinal "
-            + _ACTIVE_FILTER
-            + " AND a.label IN :labels ORDER BY a.ordinal, c.ordinal LIMIT :limit"
-        ).bindparams(bindparam("labels", expanding=True))
-        out += [Candidate(*r) for r in s.execute(sql, {"labels": refs, "doc_ids": doc_ids, "limit": limit})]
+    if not refs:
+        return []
+    sql = text(
+        "SELECT c.id, c.article_id, c.ordinal "
+        + _ACTIVE_FILTER
+        + " AND a.label IN :labels ORDER BY a.ordinal, c.ordinal LIMIT :limit"
+    ).bindparams(bindparam("labels", expanding=True))
+    return [Candidate(*r) for r in s.execute(sql, {"labels": refs, "doc_ids": doc_ids, "limit": limit})]
+
+
+def lexical_search(s: Session, question: str, doc_ids, limit: int) -> list[Candidate]:
+    """PostgreSQL full-text search ('simple' config, prefix terms)."""
     tsq = build_tsquery(question)
-    if tsq:
-        sql = text(
-            "SELECT c.id, c.article_id, c.ordinal, ts_rank_cd(c.tsv, q, 1) AS rank "
-            + _ACTIVE_FILTER.replace("WHERE", ", to_tsquery('simple', :tsq) q WHERE")
-            + " AND c.tsv @@ q ORDER BY rank DESC LIMIT :limit"
-        )
-        seen = {c.chunk_id for c in out}
-        for r in s.execute(sql, {"tsq": tsq, "doc_ids": doc_ids, "limit": limit}):
-            if r[0] not in seen:
-                out.append(Candidate(r[0], r[1], r[2]))
-    return out
+    if not tsq:
+        return []
+    sql = text(
+        "SELECT c.id, c.article_id, c.ordinal, ts_rank_cd(c.tsv, q, 1) AS rank "
+        + _ACTIVE_FILTER.replace("WHERE", ", to_tsquery('simple', :tsq) q WHERE")
+        + " AND c.tsv @@ q ORDER BY rank DESC LIMIT :limit"
+    )
+    return [Candidate(r[0], r[1], r[2]) for r in s.execute(sql, {"tsq": tsq, "doc_ids": doc_ids, "limit": limit})]
 
 
-def rrf_fuse(ranked_lists: list[list[Candidate]], k: int) -> tuple[dict[uuid.UUID, float], dict[uuid.UUID, list]]:
-    """Fuse chunk rankings, then collapse to articles (max chunk score)."""
+_APOS_CHARS = "ʻʼ'‘’`´"
+
+
+def title_search(s: Session, question: str, doc_ids, limit: int) -> list[Candidate]:
+    """Lexical match against article titles only.
+
+    Article titles in Uzbek codes are short, precise summaries of the rule, so a
+    title hit is strong evidence. Returns the article's first chunk as the
+    representative candidate.
+    """
+    tsq = build_tsquery(question)
+    if not tsq:
+        return []
+    sql = text(
+        "SELECT c.id, c.article_id, c.ordinal, "
+        "ts_rank_cd(to_tsvector('simple', translate(lower(a.title), :apos, '')), q, 1) AS rank "
+        + _ACTIVE_FILTER.replace("WHERE", ", to_tsquery('simple', :tsq) q WHERE")
+        + " AND c.ordinal = 0 AND to_tsvector('simple', translate(lower(a.title), :apos, '')) @@ q"
+        " ORDER BY rank DESC, a.ordinal LIMIT :limit"
+    )
+    rows = s.execute(sql, {"tsq": tsq, "apos": _APOS_CHARS, "doc_ids": doc_ids, "limit": limit})
+    return [Candidate(r[0], r[1], r[2]) for r in rows]
+
+
+def rrf_fuse(
+    ranked_lists: list[list[Candidate]], k: int, weights: list[float] | None = None
+) -> tuple[dict[uuid.UUID, float], dict[uuid.UUID, list]]:
+    """Weighted RRF over chunk rankings, then collapse to articles (max chunk score).
+
+    score(chunk) = sum_i  w_i / (k + rank_i)
+    """
+    weights = weights or [1.0] * len(ranked_lists)
     chunk_score: dict[uuid.UUID, float] = {}
     chunk_info: dict[uuid.UUID, Candidate] = {}
-    for lst in ranked_lists:
+    for lst, w in zip(ranked_lists, weights, strict=True):
         for rank, cand in enumerate(lst, start=1):
-            chunk_score[cand.chunk_id] = chunk_score.get(cand.chunk_id, 0.0) + 1.0 / (k + rank)
+            chunk_score[cand.chunk_id] = chunk_score.get(cand.chunk_id, 0.0) + w / (k + rank)
             chunk_info[cand.chunk_id] = cand
     article_score: dict[uuid.UUID, float] = {}
     article_chunks: dict[uuid.UUID, list] = {}
@@ -166,12 +198,25 @@ def retrieve(
     doc_ids = [str(d) for d in document_ids] if document_ids else None
     limit = settings.retrieval_candidate_limit
     lists: list[list[Candidate]] = []
+    weights: list[float] = []
     tokens = 0
+
+    def add(lst: list[Candidate], w: float) -> None:
+        if w > 0 and lst:
+            lists.append(lst)
+            weights.append(w)
+
     for variant in query_variants(question):
         tokens += estimate_tokens(variant)
-        lists.append(semantic_search(s, embedder.embed_query(variant), embedder.space, doc_ids, limit))
-        lists.append(lexical_search(s, variant, doc_ids, limit))
-    article_score, article_chunks = rrf_fuse(lists, settings.retrieval_rrf_k)
+        add(
+            semantic_search(s, embedder.embed_query(variant), embedder.space, doc_ids, limit),
+            settings.retrieval_semantic_weight,
+        )
+        add(lexical_search(s, variant, doc_ids, limit), settings.retrieval_lexical_weight)
+        add(article_ref_search(s, variant, doc_ids, limit), settings.retrieval_article_ref_weight)
+        if settings.retrieval_title_list:
+            add(title_search(s, variant, doc_ids, limit), settings.retrieval_lexical_weight)
+    article_score, article_chunks = rrf_fuse(lists, settings.retrieval_rrf_k, weights)
     ranked = sorted(article_score, key=lambda a: -article_score[a])
     top = ranked[: settings.retrieval_top_k]
     articles = _load_articles(s, top, article_score, article_chunks)

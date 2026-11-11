@@ -233,6 +233,16 @@ def _run(job_id, document_id, spec, raw, settings, embedder, now) -> IngestResul
         if existing is not None and existing.id == doc.active_version_id:
             doc.last_checked_at = raw.fetched_at
             doc.last_check_error = None
+            if raw.source_kind == "live_fetch":
+                # e.g. a local import later confirmed identical by a live fetch
+                existing.provenance = {
+                    **(existing.provenance or {}),
+                    "last_live_verification": {
+                        "at": raw.fetched_at.isoformat(),
+                        "raw_checksum": raw_sha,
+                        "snapshot": snap_path,
+                    },
+                }
             existing_id = existing.id
             already_active = True
         else:
