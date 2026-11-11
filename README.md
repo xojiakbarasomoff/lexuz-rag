@@ -26,7 +26,7 @@ exact article on Lex.uz.
 | Rate limit / budget | ✅ Redis Lua, tested with real Redis incl. 20-thread race and Redis outage |
 | Frontend | ✅ single static page, Uzbek UI, text-only rendering, XSS test |
 | Tests / CI | ✅ unit + PostgreSQL/pgvector + Redis integration tests, frontend XSS, offline Gemini adapter tests (no real API in CI). ✅ GitHub Actions CI green — live status [![CI](https://github.com/xojiakbarasomoff/lexuz-rag/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xojiakbarasomoff/lexuz-rag/actions/workflows/ci.yml) · last verified run (Gemini live eval commit be3f165, 91 tests, Docker build): https://github.com/xojiakbarasomoff/lexuz-rag/actions/runs/43021674203 |
-| Eval | ✅ 50-item benchmark (AI-drafted, **not human-verified**; review sheet `evals/review/`, status `not_reviewed`). ✅ retrieval dev/holdout and ✅ live answer eval on **dev** (results below). Holdout answers not run. |
+| Eval | ✅ 50-item benchmark (AI-drafted, **not human-verified** — review sheet `evals/review/`, all `not_reviewed`). ✅ retrieval dev/holdout, ✅ live answer eval on dev (RRF k=10 baseline) and ✅ one-time holdout answer eval — all **preliminary** until human review |
 | Deployment / CD | ⚠️ configs and scripts ready and locally validated; CD workflow runs after CI and currently skips with a notice (no `DEPLOY_HOST`). **Not deployed** — no VPS, domain or secrets |
 | Live URL | none yet |
 | Demo video | not recorded |
@@ -152,6 +152,19 @@ charged (free tier). Remaining failures and regressions are listed in
 [docs/evaluation.md](docs/evaluation.md). Citation validity is not legal
 correctness; semantic faithfulness has **not** been reviewed by a human, and
 holdout answers were not run — the project is not "done".
+
+### Answer eval — holdout, one-time run (PRELIMINARY: holdout not human-reviewed)
+
+Frozen baseline `801e957` (RRF k=10, reranker off, prompt `answer-v1`,
+`gemini-3.5-flash-lite` free tier), 20 holdout items, run once:
+
+| Status accuracy | Abstain/clarify | Citation precision | Citation recall | Validation errors | Transient provider errors | p50 / p95 latency | Tokens in / out |
+|---|---|---|---|---|---|---|---|
+| 0.900 (18/20) | 1.0 (3/3) | 0.900 | 0.824 | 3 (2 non-verbatim quotes) | 2 (hold-10, unresolved) | 4.7 s / 14.3 s | 84,125 / 8,077 |
+
+Status accuracy is a status match, not answer or legal accuracy. Nothing was
+changed after this run; issues are in the future-work list in
+[docs/evaluation.md](docs/evaluation.md). Further tuning needs new dev questions.
 
 ## Tests
 

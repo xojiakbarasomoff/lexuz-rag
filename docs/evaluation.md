@@ -205,6 +205,85 @@ difference is run-to-run variance, not the retrieval change. Valid citations
 mean the quoted words exist in the cited article — **not** that the answer is
 legally correct. Holdout was not run.
 
+## Holdout answer eval — one-time run (2026-11-11) — PRELIMINARY
+
+**The holdout benchmark has not been human-reviewed** (questions, expected
+statuses, reference articles and answers were AI-drafted). These numbers
+are a preliminary assessment only.
+
+Frozen baseline (no change made after seeing holdout):
+
+| Item | Value |
+|---|---|
+| Git commit | `801e957` (second pass shows `801e957-dirty` only because the first pass's result files were untracked; no tracked file differed) |
+| Corpus | Consumer law `7c759eec74a0` (live fetch, edition 02.02.2026); Labor Code `af3d92c6ade6` (local import, confirmed by live fetch, edition “15.10.2026 01”) |
+| Prompt | `answer-v1`, sha256(system prompt + schema) `c30ae786c78d3557` |
+| Model | `gemini-3.5-flash-lite` (provider-reported version: `gemini-3.5-flash-lite`), free tier, thinking `minimal`, max 2048 output tokens |
+| Retrieval | e5-large, top_k 6, candidates 40, **RRF k 10**, weights semantic 1.0 / FTS 0.25 / article number 2.0, title list off, **reranker off**, context 6000 tokens |
+
+Run: all 20 items once (`20261111T145607Z_answers_holdout`); hold-10 ended
+with a transient `provider_unavailable`; it was retried once with
+`--resume --retry-errors` and failed again with `provider_unavailable`
+(final report `20261111T145638Z_answers_holdout`). Both failed attempts are
+kept in `evals/results/checkpoints/answers_holdout.attempts.jsonl` and
+counted below. No further retries.
+
+| Metric (20 holdout items) | Value |
+|---|---|
+| Status accuracy (status match, not answer/legal accuracy) | 0.900 (18/20) |
+| — expected `answered` | 0.882 (15/17) |
+| — abstain / clarify | 1.000 (3/3: 1 clarification, 2 out-of-corpus) |
+| Citation precision vs expected articles | 0.900 |
+| Citation recall vs expected articles | 0.824 |
+| Claim citation coverage | 1.000 |
+| First-try valid output | 0.900 (2 needed a repair) |
+| Citation validation errors | quote not found verbatim ×2, no verifiable quote ×1 |
+| Safe fallbacks | 0 |
+| Provider safety blocks | 0 |
+| Transient provider errors | **2** (both on hold-10; unresolved → counted as an error) |
+| Attempts / LLM calls | 21 attempts, 23 calls |
+| Latency p50 / p95 (end-to-end) | 4.7 s / 14.3 s |
+| Tokens in / out (all attempts) | 84,125 / 8,077 |
+| Charged | $0 (free tier); paid-equivalent estimate $0.071 over all attempts |
+
+Failing or imperfect items (none hidden):
+
+- **hold-08** (multi_article, overtime → time off) → `insufficient_evidence`;
+  the model said the sources do not cover it (expected art. 262).
+- **hold-10** (false premise, pregnancy) → `error provider_unavailable` twice;
+  the first output had also failed quote validation before the repair call.
+- **hold-16** (paraphrase, phone defect under warranty) → answered from art. 15
+  (free repair within 20 days) instead of the expected art. 13; plausible but
+  counted as a recall miss (15 is listed as also-acceptable for precision).
+- **hold-03** → also cites art. 496 and adds a claim about temporary workers;
+  needs manual check of whether that claim is supported.
+- **hold-05** → extra cite of art. 258; **hold-06** (Cyrillic) → extra claim
+  about disability leave from art. 429.
+- **hold-01** → first output quoted a non-contiguous sentence (rejected by
+  validation), the repair produced a valid quote.
+
+## Future work (from dev + holdout; holdout NOT used for tuning)
+
+The holdout set is now spent for tuning purposes: any further tuning needs
+**new development questions** (and ideally a fresh holdout).
+
+1. Human review of all 50 benchmark items (`evals/review/`), then re-label
+   results; until then every number above is preliminary.
+2. Retrieval: everyday-language paraphrases (dev-08 / 160), multi-aspect
+   questions where the second aspect is only a lexical hit (dev-09 / 173),
+   injection-padded queries (dev-19 / 130). Candidates: query rewriting or
+   per-aspect sub-queries, measured on new dev items.
+3. Generation: non-verbatim or over-long quotes (dev-09, dev-14, hold-01,
+   hold-10) — prompt/quote guidance or quote extraction help; abstaining
+   although the article is in context (dev-23, hold-08); extra citations from
+   the other document (dev-25, hold-03/05/06).
+4. Provider reliability: Gemini free-tier 5xx/timeouts (`gemini-3.8-flash`
+   unusable today, 6 × `provider_unavailable` on 3.5 Flash-Lite across runs (4 dev, 2 holdout));
+   a user-facing retry hint already exists, nothing else is automatic.
+5. Latency: p50 varied 3.8–8.2 s between dev runs with unchanged retrieval
+   (~150 ms); monitor provider latency separately.
+6. Semantic faithfulness rubric (`evals/RUBRIC.md`) has not been applied.
+
 ## Human review
 
 `python -m evals.build_review_sheet` writes `evals/review/review_sheet.md`
