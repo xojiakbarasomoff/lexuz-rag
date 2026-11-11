@@ -161,12 +161,29 @@ def cmd_retrieval(args) -> int:
 
     settings = get_settings()
     embedder = get_embedding_provider(settings)
-    items = [i for i in load(args.split) if i["relevant"]]
+    all_items = load(args.split)
+    items = [i for i in all_items if i["relevant"]]
+    excluded = [
+        {
+            "id": i["id"],
+            "type": i["type"],
+            "expected_status": i["expected_status"],
+            "reason": "no expected article: the correct behaviour is to abstain/clarify, so Recall@k is undefined",
+        }
+        for i in all_items
+        if not i["relevant"]
+    ]
     ks = sorted({1, 3, 5, args.k, settings.retrieval_top_k})
     rows, latencies = [], []
     with get_sessionmaker()() as s:
         idx = article_index(s)
-        meta, md = header("retrieval", args.split, s, len(items), {})
+        meta, md = header(
+            "retrieval",
+            args.split,
+            s,
+            len(items),
+            {"benchmark_items_in_split": len(all_items), "excluded_from_retrieval_metrics": len(excluded)},
+        )
         for it in items:
             want = {idx[(r["source_key"], r["article"])][0] for r in it["relevant"]}
             ok_extra = {
@@ -231,7 +248,13 @@ def cmd_retrieval(args) -> int:
         f"- {r['id']} ({r['type']}): first relevant rank {r['first_relevant_rank']}; top5 {r['top5_labels']}"
         for r in misses
     ] or ["- none"]
-    path = write_report("retrieval", args.split, {**meta, "summary": summary, "per_type": per_type, "rows": rows}, md)
+    md += ["", f"## Items counted ({len(rows)} of {len(all_items)})", ""]
+    md += [", ".join(r["id"] for r in rows)]
+    md += ["", f"## Items excluded from retrieval metrics ({len(excluded)})", ""]
+    md += [f"- {x['id']} ({x['type']}, expected {x['expected_status']}): {x['reason']}" for x in excluded] or ["- none"]
+    md += ["", "These items are scored in the live answer eval (status accuracy), not here."]
+    payload = {**meta, "summary": summary, "per_type": per_type, "rows": rows, "excluded": excluded}
+    path = write_report("retrieval", args.split, payload, md)
     print("\n".join(md))
     print(f"\nreport: {path}")
     return 0
@@ -250,9 +273,28 @@ def cmd_answers(args) -> int:
     if settings.llm_provider == "fake":
         print("LLM_PROVIDER=fake: refusing to report fake answers as an evaluation")
         return 2
-    deps = Deps(settings, get_llm_provider(settings), get_embedding_provider(settings), guards=None)
+    if args.split != "dev" and not args.confirm_holdout:
+        print("holdout/all answer evals need --confirm-holdout (run only after tuning is finished)")
+        return 2
+    from app.core.limits import Guards, GuardUnavailable, get_redis
+
+    # Hard cap for the whole run: every LLM call (incl. repair calls and SDK retries)
+    # reserves its worst-case cost in a run-specific Redis budget before it is sent.
+    run_scope = "eval-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+    eval_settings = settings.model_copy(update={"daily_ai_budget_usd": args.max_cost_usd})
+    guards = Guards(get_redis(), eval_settings)
+    if not guards.ping():
+        print("Redis is required to enforce --max-cost-usd; start it first")
+        return 2
+    deps = Deps(
+        eval_settings,
+        get_llm_provider(settings),
+        get_embedding_provider(settings),
+        guards=guards,
+        budget_scope=run_scope,
+    )
     items = load(args.split)
-    rows, spent = [], 0.0
+    rows, not_run = [], []
     with get_sessionmaker()() as s:
         from app.models import Document
 
@@ -267,12 +309,15 @@ def cmd_answers(args) -> int:
                 "llm_effort": settings.llm_effort,
                 "max_output_tokens": settings.llm_max_output_tokens,
                 "prices_per_mtok_usd": [settings.llm_input_price_per_mtok_usd, settings.llm_output_price_per_mtok_usd],
+                "llm_max_retries": settings.llm_max_retries,
+                "cost_cap_usd": f"{args.max_cost_usd} (worst-case reservation per call, incl. repairs and retries)",
             },
         )
+    stop = False
     for it in items:
-        if spent >= args.max_cost_usd:
-            print(f"stopping: estimated cost {spent:.3f} >= --max-cost-usd {args.max_cost_usd}")
-            break
+        if stop:
+            not_run.append(it["id"])
+            continue
         trace = AnswerTrace()
         t0 = time.perf_counter()
         try:
@@ -282,8 +327,17 @@ def cmd_answers(args) -> int:
             status, err = resp.status, None
         except AnswerError as exc:
             resp, status, err = None, "error", exc.code
+            if exc.code == "budget_exhausted":
+                print(f"stopping: cost cap {args.max_cost_usd} USD reached (reservation refused)")
+                not_run.append(it["id"])
+                stop = True
+                continue
+        except GuardUnavailable:
+            print("stopping: Redis unavailable, cannot enforce the cost cap")
+            not_run.append(it["id"])
+            stop = True
+            continue
         latency = (time.perf_counter() - t0) * 1000
-        spent += trace.est_cost_usd
         want = {(r["source_key"], r["article"]) for r in it["relevant"]}
         acceptable = want | {(r["source_key"], r["article"]) for r in it.get("also_relevant", [])}
         claims = resp.claims if resp else []
@@ -312,13 +366,21 @@ def cmd_answers(args) -> int:
                 "output_tokens": trace.output_tokens,
                 "est_cost_usd": round(trace.est_cost_usd, 5),
                 "latency_ms": round(latency),
+                "llm_calls": trace.llm_calls,
+                "validation_errors": trace.validation_errors,
                 "answer": [c.text for c in claims],
+                "sources": [
+                    {"id": x.source_id, "article": f"{doc_keys[x.document_id]}:{x.article_label}", "excerpt": x.excerpt}
+                    for x in (resp.sources if resp else [])
+                ],
                 "clarifying_question": resp.clarifying_question if resp else None,
                 "limitations": resp.limitations if resp else [],
             }
         )
         print(f"{it['id']}: {status} (expected {it['expected_status']}) {round(latency)} ms")
     summary = _answer_summary(rows)
+    summary["not_run_due_to_cap"] = len(not_run)
+    summary["budget_state"] = guards.budget_state(run_scope)
     md += ["", "## Results", "", "| metric | value |", "|---|---|"] + [f"| {k} | {v} |" for k, v in summary.items()]
     md += [
         "",
@@ -335,7 +397,47 @@ def cmd_answers(args) -> int:
         for r in rows
         if not r["status_correct"]
     ] or ["- none"]
-    path = write_report("answers", args.split, {**meta, "summary": summary, "rows": rows}, md)
+    questions = {i["id"]: i for i in items}
+    for r in rows:
+        r["expected"] = [f"{x['source_key']}:{x['article']}" for x in questions[r["id"]]["relevant"]]
+
+    def show(r):
+        head = f"### {r['id']} ({r['type']}) - expected {r['expected_status']}, got {r['status']}"
+        lines = [head + (f" (error {r['error']})" if r["error"] else "")]
+        lines.append(f"- question: {questions[r['id']]['question']}")
+        lines += [f"- claim: {a}" for a in r["answer"]]
+        if r["clarifying_question"]:
+            lines.append(f"- clarifying question: {r['clarifying_question']}")
+        lines += [f"- limitation: {x}" for x in r["limitations"]]
+        lines += [f"- cited {x['id']} = {x['article']}" for x in r["sources"]]
+        lines.append(f"- expected articles: {r['expected']}")
+        lines += [f"- validation error: {e}" for e in r["validation_errors"][:6]]
+        return [*lines, ""]
+
+    sections = [
+        (
+            "Citations outside the expected articles (precision < 1)",
+            [r for r in rows if r["citation_precision"] is not None and r["citation_precision"] < 1],
+        ),
+        (
+            "Expected article not cited (recall < 1, answered)",
+            [
+                r
+                for r in rows
+                if r["status"] == "answered" and r["citation_recall"] is not None and r["citation_recall"] < 1
+            ],
+        ),
+        ("Needed a repair call (first output failed validation)", [r for r in rows if r["repaired"]]),
+        ("Status errors - full detail", [r for r in rows if not r["status_correct"]]),
+    ]
+    for title, sel in sections:
+        md += ["", f"## {title}", ""]
+        for r in sel:
+            md += show(r)
+        if not sel:
+            md.append("- none")
+    md += ["", "## Not run (cost cap)", "", ", ".join(not_run) or "- none"]
+    path = write_report("answers", args.split, {**meta, "summary": summary, "rows": rows, "not_run": not_run}, md)
     print("\n".join(md))
     print(f"\nreport: {path}")
     return 0
@@ -381,6 +483,7 @@ def main(argv: list[str] | None = None) -> int:
     a = sub.add_parser("answers")
     a.add_argument("--split", default="dev", choices=["dev", "holdout", "all"])
     a.add_argument("--max-cost-usd", type=float, default=1.0)
+    a.add_argument("--confirm-holdout", action="store_true")
     a.set_defaults(fn=cmd_answers)
     args = p.parse_args(argv)
     return args.fn(args)

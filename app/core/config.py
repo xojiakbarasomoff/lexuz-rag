@@ -77,15 +77,18 @@ class Settings(BaseSettings):
 
     # --- generation ------------------------------------------------------
     llm_provider: Literal["anthropic", "fake"] = "anthropic"
-    llm_model: str = "claude-opus-5-5"
+    # Verified 2026-11-11 on platform.claude.com models overview + pricing (docs/decisions.md D15).
+    llm_model: str = "claude-haiku-5-5"
     llm_effort: Literal["low", "medium", "high", "xhigh", "max"] = "low"
     llm_max_output_tokens: int = 4096
     llm_timeout_s: float = 60.0
     llm_max_retries: int = 1
     # Server-side refusal fallback ("default" lets the API pick the fallback model).
-    llm_refusal_fallback: Literal["default", "off"] = "default"
-    llm_input_price_per_mtok_usd: float = 4.0
-    llm_output_price_per_mtok_usd: float = 20.0
+    # Haiku 5.5 has no server-side refusal fallback; "default" is for Opus/Sonnet/Fable.
+    llm_refusal_fallback: Literal["default", "off"] = "off"
+    # Haiku 5.5 list price for prompts <= 100k tokens (our prompts are far smaller).
+    llm_input_price_per_mtok_usd: float = 0.10
+    llm_output_price_per_mtok_usd: float = 0.50
 
     # --- public demo limits ---------------------------------------------
     rate_limit_per_minute: int = 5

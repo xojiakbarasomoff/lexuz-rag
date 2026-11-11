@@ -53,8 +53,9 @@ class Deps:
     settings: Settings
     llm: LLMProvider
     embedder: EmbeddingProvider
-    guards: Guards | None  # None = no guards (CLI / offline eval only)
+    guards: Guards | None  # None = no guards (CLI only)
     session_factory: object = None
+    budget_scope: str = "public"  # separate Redis budget, e.g. "eval-<run>"
 
 
 @dataclass
@@ -114,13 +115,14 @@ def _guarded_call(deps: Deps, trace: AnswerTrace, user: str, request_id: str) ->
     s = deps.settings
     call_id = f"{request_id}:{trace.llm_calls}"
     est_in = int(estimate_tokens(SYSTEM_PROMPT + user) * 1.3) + 200
-    est_cost = estimate_cost_usd(s, est_in, s.llm_max_output_tokens)
+    # Worst case: full output budget on every SDK attempt (initial + retries).
+    est_cost = estimate_cost_usd(s, est_in, s.llm_max_output_tokens) * (1 + s.llm_max_retries)
     g = deps.guards
     if g:
         g.acquire_slot(call_id)
     try:
         if g:
-            g.reserve(call_id, est_cost)
+            g.reserve(call_id, est_cost, scope=deps.budget_scope)
         trace.llm_calls += 1
         t0 = time.perf_counter()
         try:
@@ -134,7 +136,7 @@ def _guarded_call(deps: Deps, trace: AnswerTrace, user: str, request_id: str) ->
             else:
                 actual = 0.0 if exc.code in LLMError.NOT_BILLED else est_cost  # timeout: may be billed
             if g:
-                g.settle(call_id, actual)
+                g.settle(call_id, actual, scope=deps.budget_scope)
             trace.est_cost_usd += actual
             metrics.provider_errors.labels(code=exc.code).inc()
             _record_usage(
@@ -150,7 +152,7 @@ def _guarded_call(deps: Deps, trace: AnswerTrace, user: str, request_id: str) ->
             raise
         actual = estimate_cost_usd(s, res.input_tokens, res.output_tokens)
         if g:
-            g.settle(call_id, actual)
+            g.settle(call_id, actual, scope=deps.budget_scope)
         trace.input_tokens += res.input_tokens
         trace.output_tokens += res.output_tokens
         trace.est_cost_usd += actual

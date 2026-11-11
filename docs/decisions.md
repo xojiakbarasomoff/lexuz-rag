@@ -42,10 +42,10 @@ image + 2.2 GB model download. An API embedding adapter can be added behind
 the same interface; it must go through the ingestion budget.
 
 ### D9. Claude via the official `anthropic` SDK, structured JSON output, no tools
-Default model `claude-opus-5-5`, effort `low`, configurable (`LLM_MODEL`,
+Originally `claude-opus-5-5`; since D15 the default is `claude-haiku-5-5`. Effort `low`, configurable (`LLM_MODEL`,
 `LLM_EFFORT`, prices). A cheaper model (e.g. `claude-haiku-5-5`) can be set
 by env; that choice should be made after a live eval on dev. Server-side
-refusal fallback (`fallbacks: "default"`) is on and can be disabled with
+refusal fallback (`fallbacks: "default"`) is available for Opus/Sonnet and is off by default since D15 (`LLM_REFUSAL_FALLBACK`); was controlled by
 `LLM_REFUSAL_FALLBACK=off`. Thinking cannot be disabled on Opus 5.5; it
 counts toward `LLM_MAX_OUTPUT_TOKENS`, which the budget reserves in full.
 
@@ -76,3 +76,25 @@ by nginx and optionally token-protected.
 uvicorn `--forwarded-allow-ips` is set to nginx's fixed container IP; nginx
 overwrites `X-Forwarded-For` with `$remote_addr`. Clients cannot spoof their
 rate-limit identity.
+
+### D15. Default LLM: `claude-haiku-5-5` (verified 2026-11-11)
+Checked on the official docs (platform.claude.com: models overview, pricing,
+structured outputs). Current API IDs: `claude-opus-5-5`, `claude-sonnet-5-5`,
+`claude-haiku-5-5` (all active; retirement not before Sep–Oct 2027). All three
+are listed as supporting structured outputs (`output_config.format`).
+List prices per 1M tokens: Opus 5.5 $4 / $20, Sonnet 5.5 $2 / $10,
+Haiku 5.5 $0.10 / $0.50 for prompts up to 100k tokens ($0.50 / $2.50 above;
+our prompts are < 10k). For a public demo with a few-dollar daily budget,
+Haiku 5.5 is ~40× cheaper than Opus 5.5; whether its Uzbek legal answers are
+good enough is decided by the dev answer eval, not assumed. Switch with
+`LLM_MODEL` + the two price variables. Haiku 5.5 has no server-side refusal
+fallback, so `LLM_REFUSAL_FALLBACK=off` is the default (set `default` for
+Opus/Sonnet). Our JSON schema uses only supported features (no
+`minLength`/`maximum` etc.). Haiku 5.5 thinking is adaptive with default
+effort `medium`; we send `low` and do not try to disable thinking.
+
+### D16. Budget reservation covers SDK retries
+Worst-case reservation = (estimated input × 1.3 + max output) × prices ×
+(1 + `LLM_MAX_RETRIES`), so a retried request cannot exceed the cap. The
+answer eval uses its own Redis budget scope with `--max-cost-usd` as the limit;
+a call whose reservation is refused is never sent and the run stops.
